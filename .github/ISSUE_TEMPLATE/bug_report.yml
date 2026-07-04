@@ -23,7 +23,7 @@ body:
     id: version
     attributes:
       label: Version / image
-      description: doction version or image digest (e.g. ghcr.io/dny1020/pulse_bogota).
+      description: pulse_bogota version or image digest (e.g. ghcr.io/dny1020/pulse_bogota).
     validations:
       required: true
   - type: textarea

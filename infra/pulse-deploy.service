@@ -5,4 +5,4 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/pulse/deploy.sh
+ExecStart=/opt/pulse_bogota/deploy.sh

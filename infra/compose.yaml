@@ -1,6 +1,6 @@
 services:
   api:
-    image: ${PULSE_IMAGE:-ghcr.io/jnarvaar/pulse_bogota:latest}
+    image: ${PULSE_IMAGE:-ghcr.io/dny1020/pulse_bogota:latest}
     container_name: pulse
     restart: unless-stopped
     env_file: .env
@@ -14,7 +14,6 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - /mnt/ssd/pulse_bogota/data:/data
       # Local mount so log files survive container restarts and are
       # readable from the host.
       - /mnt/ssd/pulse_bogota/logs:/app/logs

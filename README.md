@@ -97,7 +97,7 @@ GitHub.
   pull the new tag:
 
   ```bash
-  export PULSE_IMAGE=ghcr.io/<owner>/pulse_bogota:latest
+  export PULSE_IMAGE=ghcr.io/dny1020/pulse_bogota:latest
   docker compose pull && docker compose up -d
   ```
 

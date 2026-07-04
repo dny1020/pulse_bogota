@@ -1,8 +1,8 @@
 [Unit]
-Description=pulse backup (snapshot de SQLite DB)
+Description=pulse backup (pg_dump PostgreSQL)
 After=docker.service
 Requires=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/pulse/backup.sh
+ExecStart=/opt/pulse_bogota/backup.sh

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # pulse restore — restore a snapshot created by backup.sh.
-#   usage: restore.sh <backup-dir>   (e.g. /mnt/ssd/pulse-backups/20260618-033000)
+#   usage: restore.sh <backup-dir>   (e.g. /mnt/ssd/pulse_bogota/backups/20260618-033000)
 set -euo pipefail
 
 SRC="${1:?usage: restore.sh <backup-dir>}"
-COMPOSE="${PULSE_COMPOSE:-/opt/pulse/compose.yaml}"
+COMPOSE="${PULSE_COMPOSE:-/opt/pulse_bogota/compose.yaml}"
 
 [ -f "$SRC/pulse.sql.gz" ] || { echo "no $SRC/pulse.sql.gz found" >&2; exit 1; }
 

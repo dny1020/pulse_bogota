@@ -3,7 +3,7 @@
 # Pull de GHCR; si el digest cambió, recrea el contenedor y verifica /health.
 
 set -euo pipefail
-cd /opt/pulse
+cd /opt/pulse_bogota
 
 before=$(docker inspect -f '{{.Image}}' pulse 2>/dev/null || echo none)
 docker compose pull -q

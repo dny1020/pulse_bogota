@@ -3,9 +3,9 @@
 # pg_dump takes a consistent snapshot on its own, so the API keeps running.
 set -euo pipefail
 
-BACKUP_DIR="${PULSE_BACKUP_DIR:-/mnt/ssd/pulse-backups}"
+BACKUP_DIR="${PULSE_BACKUP_DIR:-/mnt/ssd/pulse_bogota/backups}"
 KEEP="${PULSE_BACKUP_KEEP:-7}"
-COMPOSE="${PULSE_COMPOSE:-/opt/pulse/compose.yaml}"
+COMPOSE="${PULSE_COMPOSE:-/opt/pulse_bogota/compose.yaml}"
 
 ts="$(date +%Y%m%d-%H%M%S)"
 dest="$BACKUP_DIR/$ts"
