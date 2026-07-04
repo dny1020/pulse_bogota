@@ -49,6 +49,18 @@ def test_level_filters_lower_entries(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert "should_be_written" in content
 
 
+def test_httpx_request_urls_are_not_logged(monkeypatch: pytest.MonkeyPatch) -> None:
+    # httpx INFO lines contain full request URLs, which carry API keys as
+    # query params (TomTom, Ticketmaster). They must never reach the handlers.
+    monkeypatch.setenv("LOG_LEVEL", "INFO")
+    get_settings.cache_clear()
+
+    configure_logging()
+
+    assert logging.getLogger("httpx").getEffectiveLevel() == logging.WARNING
+    assert logging.getLogger("httpcore").getEffectiveLevel() == logging.WARNING
+
+
 def test_unwritable_log_file_keeps_app_alive(monkeypatch: pytest.MonkeyPatch) -> None:
     # /proc is not writable: the file handler is skipped, console keeps working.
     monkeypatch.setenv("LOG_FILE", "/proc/nope/pulse.log")

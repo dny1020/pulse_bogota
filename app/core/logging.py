@@ -56,6 +56,10 @@ def configure_logging() -> None:
         handlers=_build_handlers(settings.log_file),
         force=True,
     )
+    # httpx logs full request URLs at INFO, which leaks API keys passed as
+    # query params (TomTom, Ticketmaster) into the log file. Keep it quiet.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     structlog.configure(
         processors=[
             structlog.processors.add_log_level,
