@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,9 +12,27 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.collectors import events, traffic, weather
+from app.core.config import Settings, get_settings
 from app.database.database import Base, get_db
 from app.database.seed import seed_places
 from app.main import app
+
+_ENV_EXAMPLE = Path(__file__).resolve().parent.parent / ".env.example"
+
+
+@pytest.fixture(autouse=True)
+def example_env_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Load settings from .env.example (all keys blank) for every test.
+
+    Keeps tests deterministic: real credentials in the developer's .env (or
+    exported in the shell) must never reach the collectors.
+    """
+    for var in ("TOMTOM_API_KEY", "EVENTBRITE_API_KEY", "GOOGLE_PLACES_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setitem(Settings.model_config, "env_file", str(_ENV_EXAMPLE))
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture
