@@ -16,9 +16,10 @@ __pycache__/
 .pytest_cache/
 
 # VCS, docs, dev-only files
+# (tests/ and .env.example stay in the context: the Dockerfile `test` stage
+# runs the suite in-image; they are not copied into the runtime stage.)
 .git/
 .gitignore
-tests/
 *.md
 Makefile
 Dockerfile
