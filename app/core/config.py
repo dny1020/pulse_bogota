@@ -28,14 +28,26 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     scheduler_interval_minutes: int = 15
 
+    # OSM/Overpass place importer (no key needed). The bounding box is
+    # "south,west,north,east" and defaults to Bogotá.
+    osm_import_enabled: bool = True
+    osm_import_limit: int = 50
+    osm_bbox: str = "4.47,-74.20,4.83,-73.99"
+
     default_city: str = "Bogotá"
     default_country: str = "Colombia"
 
     http_timeout_seconds: float = 10.0
 
+    # Events collector: search radius around each place and how far ahead
+    # to look for events that count towards the score.
+    events_radius_km: int = 2
+    events_window_hours: int = 24
+
     # Optional external API keys (blank -> collector disabled).
     tomtom_api_key: str | None = None
     google_places_api_key: str | None = None
+    ticketmaster_api_key: str | None = None
 
 
 @lru_cache

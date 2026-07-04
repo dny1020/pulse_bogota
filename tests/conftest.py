@@ -27,7 +27,7 @@ def example_env_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     Keeps tests deterministic: real credentials in the developer's .env (or
     exported in the shell) must never reach the collectors.
     """
-    for var in ("TOMTOM_API_KEY", "GOOGLE_PLACES_API_KEY"):
+    for var in ("TOMTOM_API_KEY", "GOOGLE_PLACES_API_KEY", "TICKETMASTER_API_KEY"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setitem(Settings.model_config, "env_file", str(_ENV_EXAMPLE))
     get_settings.cache_clear()
@@ -83,6 +83,10 @@ def offline_collectors(monkeypatch: pytest.MonkeyPatch) -> None:
     Weather returns a fixed value; the key-gated collectors stay disabled, so
     activity comes from weather + the seeded popularity signal.
     """
-    monkeypatch.setattr(weather, "fetch_weather_score", lambda place: 50.0)
-    monkeypatch.setattr(traffic, "fetch_traffic_score", lambda place: None)
-    monkeypatch.setattr(events, "fetch_event_score", lambda place: None)
+    monkeypatch.setattr(
+        weather,
+        "fetch_weather",
+        lambda place: weather.WeatherReading(score=50.0, temperature_c=18.0, precipitation_mm=0.0),
+    )
+    monkeypatch.setattr(traffic, "fetch_traffic", lambda place: None)
+    monkeypatch.setattr(events, "fetch_events", lambda place: None)

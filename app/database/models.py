@@ -33,6 +33,10 @@ class Place(Base):
     rating: Mapped[float | None] = mapped_column(Float, default=None)
     rating_count: Mapped[int | None] = mapped_column(Integer, default=None)
 
+    # OSM element id ("node/123", "way/456") set by the Overpass importer.
+    # Unique so re-imports update the same row instead of duplicating it.
+    osm_id: Mapped[str | None] = mapped_column(String(60), default=None, unique=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
@@ -57,6 +61,18 @@ class History(Base):
     weather_score: Mapped[float | None] = mapped_column(Float, default=None)
     event_score: Mapped[float | None] = mapped_column(Float, default=None)
     social_score: Mapped[float | None] = mapped_column(Float, default=None)
+
+    # Raw signal values behind the sub-scores, kept for future ML features.
+    temperature_c: Mapped[float | None] = mapped_column(Float, default=None)
+    precipitation_mm: Mapped[float | None] = mapped_column(Float, default=None)
+    current_speed_kmh: Mapped[float | None] = mapped_column(Float, default=None)
+    free_flow_speed_kmh: Mapped[float | None] = mapped_column(Float, default=None)
+    event_count: Mapped[int | None] = mapped_column(Integer, default=None)
+    next_event_starts_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+    place_rating: Mapped[float | None] = mapped_column(Float, default=None)
+    place_rating_count: Mapped[int | None] = mapped_column(Integer, default=None)
 
     confidence: Mapped[float] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(

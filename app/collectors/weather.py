@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import httpx
 
 from app.core.config import get_settings
@@ -13,11 +15,21 @@ log = get_logger(__name__)
 _OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
 
-def fetch_weather_score(place: Place) -> float | None:
-    """Return a 0-100 'pleasant weather' score, or ``None`` if unavailable.
+@dataclass
+class WeatherReading:
+    """One weather observation: the 0-100 sub-score plus the raw values."""
 
-    Higher means nicer weather, which tends to make places busier. Uses
-    Open-Meteo current conditions; no API key required.
+    score: float
+    temperature_c: float | None = None
+    precipitation_mm: float | None = None
+
+
+def fetch_weather(place: Place) -> WeatherReading | None:
+    """Return the current weather reading for a place, or ``None``.
+
+    The score is a 0-100 'pleasant weather' signal (higher means nicer, which
+    tends to make places busier). Raw temperature and precipitation are kept
+    alongside so scoring runs can persist them for future ML features.
     """
     settings = get_settings()
     params: dict[str, str | float] = {
@@ -29,13 +41,24 @@ def fetch_weather_score(place: Place) -> float | None:
         resp = httpx.get(_OPEN_METEO_URL, params=params, timeout=settings.http_timeout_seconds)
         resp.raise_for_status()
         current = resp.json()["current"]
-        return score_from_conditions(
-            precipitation=float(current.get("precipitation", 0.0)),
-            cloud_cover=float(current.get("cloud_cover", 0.0)),
-        )
+        precipitation = float(current.get("precipitation", 0.0))
+        cloud_cover = float(current.get("cloud_cover", 0.0))
+        temperature = current.get("temperature_2m")
     except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
         log.warning("weather_collector_failed", place_id=place.id, error=str(exc))
         return None
+
+    return WeatherReading(
+        score=score_from_conditions(precipitation=precipitation, cloud_cover=cloud_cover),
+        temperature_c=float(temperature) if temperature is not None else None,
+        precipitation_mm=precipitation,
+    )
+
+
+def fetch_weather_score(place: Place) -> float | None:
+    """Return only the 0-100 weather sub-score (diagnostic endpoints)."""
+    reading = fetch_weather(place)
+    return reading.score if reading else None
 
 
 def score_from_conditions(precipitation: float, cloud_cover: float) -> float:

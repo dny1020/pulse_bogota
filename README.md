@@ -19,9 +19,10 @@ uv run uvicorn app.main:app --reload
 
 Or use the Makefile: `make install` then `make run`.
 
-Open Swagger at <http://127.0.0.1:8000/docs>. On first start the DB is created
-and seeded with ~14 real Bogotá places, then the scheduler begins recalculating
-scores every 15 minutes.
+Open Swagger at <http://127.0.0.1:8000/docs>. On first start Alembic migrations
+create the schema and ~14 real Bogotá places are seeded; the scheduler then
+recalculates scores every 15 minutes and imports new places from OpenStreetMap
+weekly (or on demand via `POST /importer/osm`).
 
 ## How scoring works
 
@@ -29,10 +30,11 @@ The **activity score** is a weighted blend: `traffic 40% · weather 25% · event
 20% · popularity 15%`. Collectors call real APIs and **degrade gracefully**: if
 an API key is missing or a request fails, that signal is dropped, the remaining
 weights are renormalised, and `confidence` (share of weight available) drops.
-Only Open-Meteo (weather) works with no key; add `TOMTOM_API_KEY` and/or
-`GOOGLE_PLACES_API_KEY` to `.env` to enable the rest. The events collector has
-no provider wired yet and always contributes `None` (its weight is
-renormalised away).
+Only Open-Meteo (weather) works with no key; add `TOMTOM_API_KEY`,
+`TICKETMASTER_API_KEY` and/or `GOOGLE_PLACES_API_KEY` to `.env` to enable the
+rest. Events counts Ticketmaster events starting near each place within the
+next `EVENTS_WINDOW_HOURS` (default 24h, radius `EVENTS_RADIUS_KM`, default
+2 km).
 
 The **discovery score** rewards calm, well-rated, little-known places, so a
 quiet café can rank above a crowded landmark.
@@ -49,6 +51,7 @@ quiet café can rank above a crowded landmark.
 | GET | `/top/quiet`, `/top/busy` | Rankings |
 | POST | `/engine/recalculate` | Score all places now |
 | POST | `/collector/{weather,traffic,events,google}` | Run one collector |
+| POST | `/importer/osm` | Discover & store new places from OpenStreetMap |
 | GET | `/discover/{quiet,hidden,random,surprise}` | Discovery engine |
 
 ## Development
@@ -103,5 +106,5 @@ GitHub.
 - The deployment compose (`infra/compose.yaml`) runs the same api + PostgreSQL
   pair; backups use `pg_dump` (`infra/backup.sh`).
 
-See `CLAUDE.md` for architecture and conventions, and `SPEC.md` for the product
-spec.
+See `CLAUDE.md` for architecture and conventions, `SPEC.md` for the product
+spec (as built), and `plan.md` for future work.

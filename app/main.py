@@ -10,7 +10,6 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from sqlalchemy.exc import SQLAlchemyError
 
 from app.api import (
     activity,
@@ -19,14 +18,15 @@ from app.api import (
     engine,
     health,
     history,
+    importer,
     places,
     query,
     top,
 )
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
-from app.database.database import Base, SessionLocal
-from app.database.database import engine as db_engine
+from app.database.database import SessionLocal
+from app.database.migrate import run_migrations
 from app.database.seed import seed_places
 from app.scheduler.jobs import shutdown_scheduler, start_scheduler
 
@@ -38,11 +38,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialise DB + seed data and manage the scheduler lifecycle."""
     configure_logging()
     try:
-        Base.metadata.create_all(bind=db_engine)
+        run_migrations()
         with SessionLocal() as db:
             inserted = seed_places(db)
-    except SQLAlchemyError as exc:
-        # Fail fast with a clear log; the container restart policy retries.
+    except Exception as exc:
+        # DB or migration failure: fail fast with a clear log; the container
+        # restart policy retries.
         log.error("startup_db_failed", error=str(exc))
         raise
     log.info("startup", seeded_places=inserted)
@@ -68,5 +69,6 @@ for router in (
     engine.router,
     collectors.router,
     discover.router,
+    importer.router,
 ):
     app.include_router(router)

@@ -6,6 +6,7 @@ import pytest
 
 from app.collectors import events, google, traffic, weather
 from app.collectors.weather import score_from_conditions
+from app.core.config import Settings
 from app.database.models import Place
 
 
@@ -35,6 +36,16 @@ def test_weather_fetch_parses_response(monkeypatch: pytest.MonkeyPatch) -> None:
     assert weather.fetch_weather_score(_place()) == 100.0
 
 
+def test_weather_fetch_returns_raw_reading(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {"current": {"temperature_2m": 18, "precipitation": 1.2, "cloud_cover": 50}}
+    monkeypatch.setattr(weather.httpx, "get", lambda *a, **k: _FakeResponse(payload))
+    reading = weather.fetch_weather(_place())
+    assert reading is not None
+    assert reading.temperature_c == 18.0
+    assert reading.precipitation_mm == 1.2
+    assert 0 <= reading.score <= 100
+
+
 def test_weather_fetch_degrades_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def boom(*args: object, **kwargs: object) -> None:
         raise weather.httpx.HTTPError("network down")
@@ -48,3 +59,49 @@ def test_keyed_collectors_disabled_without_key() -> None:
     assert traffic.fetch_traffic_score(place) is None
     assert events.fetch_event_score(place) is None
     assert google.fetch_place_metadata(place) is None
+
+
+def test_event_score_from_count_is_pure() -> None:
+    assert events.score_from_event_count(0) == 0.0
+    assert events.score_from_event_count(1) == 20.0
+    assert events.score_from_event_count(5) == 100.0
+    assert events.score_from_event_count(50) == 100.0
+
+
+def test_events_fetch_parses_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {
+        "page": {"totalElements": 2},
+        "_embedded": {"events": [{"dates": {"start": {"dateTime": "2026-07-04T23:00:00Z"}}}]},
+    }
+    monkeypatch.setattr(events, "get_settings", _settings_with_ticketmaster_key)
+    monkeypatch.setattr(events.httpx, "get", lambda *a, **k: _FakeResponse(payload))
+    reading = events.fetch_events(_place())
+    assert reading is not None
+    assert reading.score == 40.0
+    assert reading.event_count == 2
+    assert reading.next_event_starts_at is not None
+    assert reading.next_event_starts_at.isoformat() == "2026-07-04T23:00:00+00:00"
+
+
+def test_events_fetch_handles_zero_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {"page": {"totalElements": 0}}
+    monkeypatch.setattr(events, "get_settings", _settings_with_ticketmaster_key)
+    monkeypatch.setattr(events.httpx, "get", lambda *a, **k: _FakeResponse(payload))
+    reading = events.fetch_events(_place())
+    assert reading is not None
+    assert reading.score == 0.0
+    assert reading.event_count == 0
+    assert reading.next_event_starts_at is None
+
+
+def test_events_fetch_degrades_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(*args: object, **kwargs: object) -> None:
+        raise events.httpx.HTTPError("network down")
+
+    monkeypatch.setattr(events, "get_settings", _settings_with_ticketmaster_key)
+    monkeypatch.setattr(events.httpx, "get", boom)
+    assert events.fetch_event_score(_place()) is None
+
+
+def _settings_with_ticketmaster_key() -> Settings:
+    return Settings(ticketmaster_api_key="test-key")

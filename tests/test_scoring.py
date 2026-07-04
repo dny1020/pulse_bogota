@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.database.models import History
 
 
 def test_recalculate_populates_activity(
@@ -42,6 +46,22 @@ def test_top_quiet_and_busy_ordering(seeded_client: TestClient, offline_collecto
     busy = [item["score"] for item in seeded_client.get("/top/busy").json()]
     assert quiet == sorted(quiet)
     assert busy == sorted(busy, reverse=True)
+
+
+def test_raw_signals_persisted_in_history(
+    seeded_client: TestClient, db_session: Session, offline_collectors: None
+) -> None:
+    seeded_client.post("/engine/recalculate")
+    record = db_session.scalars(select(History)).first()
+    assert record is not None
+    # Raw values from the (patched) weather reading.
+    assert record.temperature_c == 18.0
+    assert record.precipitation_mm == 0.0
+    # Rating snapshot copied from the seeded place.
+    assert record.place_rating is not None
+    # Traffic disabled -> no raw speeds.
+    assert record.current_speed_kmh is None
+    assert record.free_flow_speed_kmh is None
 
 
 def test_disabled_collectors_return_none(

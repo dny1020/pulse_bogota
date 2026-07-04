@@ -16,27 +16,39 @@ from app.schemas.activity import ActivityRead
 
 
 def score_place(db: Session, place: Place) -> History:
-    """Run every collector for one place, compute its score, persist History."""
-    traffic_score = traffic.fetch_traffic_score(place)
-    weather_score = weather.fetch_weather_score(place)
-    event_score = events.fetch_event_score(place)
+    """Run every collector for one place, compute its score, persist History.
+
+    Besides the 0-100 sub-scores, the raw signal values (temperature, rain,
+    speeds, rating snapshot) are stored so future ML features have real data.
+    """
+    traffic_reading = traffic.fetch_traffic(place)
+    weather_reading = weather.fetch_weather(place)
+    events_reading = events.fetch_events(place)
     social_score = popularity_score(place.rating, place.rating_count)
 
     activity, confidence = compute_activity(
         {
-            "traffic": traffic_score,
-            "weather": weather_score,
-            "events": event_score,
+            "traffic": traffic_reading.score if traffic_reading else None,
+            "weather": weather_reading.score if weather_reading else None,
+            "events": events_reading.score if events_reading else None,
             "popularity": social_score,
         }
     )
     record = History(
         place_id=place.id,
         activity_score=activity,
-        traffic_score=traffic_score,
-        weather_score=weather_score,
-        event_score=event_score,
+        traffic_score=traffic_reading.score if traffic_reading else None,
+        weather_score=weather_reading.score if weather_reading else None,
+        event_score=events_reading.score if events_reading else None,
         social_score=social_score,
+        temperature_c=weather_reading.temperature_c if weather_reading else None,
+        precipitation_mm=weather_reading.precipitation_mm if weather_reading else None,
+        current_speed_kmh=traffic_reading.current_speed_kmh if traffic_reading else None,
+        free_flow_speed_kmh=traffic_reading.free_flow_speed_kmh if traffic_reading else None,
+        event_count=events_reading.event_count if events_reading else None,
+        next_event_starts_at=events_reading.next_event_starts_at if events_reading else None,
+        place_rating=place.rating,
+        place_rating_count=place.rating_count,
         confidence=confidence,
     )
     db.add(record)

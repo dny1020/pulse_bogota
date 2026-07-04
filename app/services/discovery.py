@@ -11,10 +11,24 @@ import random
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.logging import get_logger
 from app.database.models import Place
 from app.engine.score import compute_discovery
 from app.schemas.discovery import DiscoveryRecommendation
 from app.services.scoring import latest_history
+
+log = get_logger(__name__)
+
+
+def _log_request(kind: str, recs: list[DiscoveryRecommendation], **filters: object) -> None:
+    """Log each recommendation request: raw material for a future ranking model."""
+    log.info(
+        "discover_request",
+        kind=kind,
+        results=len(recs),
+        recommended_ids=[rec.id for rec in recs],
+        **{name: value for name, value in filters.items() if value is not None},
+    )
 
 
 def _activity_for(db: Session, place: Place) -> int | None:
@@ -73,7 +87,9 @@ def discover_quiet(
         return activity if activity is not None else 999
 
     places.sort(key=_activity_key)
-    return [_recommend(db, p, "Among the quietest places right now") for p in places[:limit]]
+    recs = [_recommend(db, p, "Among the quietest places right now") for p in places[:limit]]
+    _log_request("quiet", recs, city=city, category=category, limit=limit)
+    return recs
 
 
 def discover_hidden(
@@ -82,7 +98,9 @@ def discover_hidden(
     """The highest discovery score: well-rated yet little explored."""
     places = _filtered_places(db, city=city, category=category, max_score=None)
     places.sort(key=lambda p: _discovery_for(db, p), reverse=True)
-    return [_recommend(db, p, "Highly rated but little explored") for p in places[:limit]]
+    recs = [_recommend(db, p, "Highly rated but little explored") for p in places[:limit]]
+    _log_request("hidden", recs, city=city, category=category, limit=limit)
+    return recs
 
 
 def discover_random(
@@ -97,7 +115,9 @@ def discover_random(
     """A reproducible random pick of places matching the filters."""
     places = _filtered_places(db, city=city, category=category, max_score=max_score)
     random.Random(seed).shuffle(places)
-    return [_recommend(db, p, "A spot that matches your filters") for p in places[:limit]]
+    recs = [_recommend(db, p, "A spot that matches your filters") for p in places[:limit]]
+    _log_request("random", recs, city=city, category=category, max_score=max_score, limit=limit)
+    return recs
 
 
 def discover_surprise(
@@ -112,4 +132,6 @@ def discover_surprise(
     categories = list(by_category)
     rng.shuffle(categories)
     chosen = [rng.choice(by_category[category]) for category in categories]
-    return [_recommend(db, p, "Step out of your routine") for p in chosen[:limit]]
+    recs = [_recommend(db, p, "Step out of your routine") for p in chosen[:limit]]
+    _log_request("surprise", recs, city=city, limit=limit)
+    return recs
