@@ -1,0 +1,28 @@
+# Third-party code (not part of project architecture)
+.venv/
+
+# Caches (no architectural value)
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+
+# Generated output (would create cycles with graphify-out)
+graphify-out/
+
+# Secrets (no structural value)
+.env
+
+# Binary data
+*.db
+*.sqlite3
+
+# Config files (no architecture insight)
+.dockerignore
+.gitignore
+.claudeignore
+.graphifyignore
+
+# OS
+.DS_Store

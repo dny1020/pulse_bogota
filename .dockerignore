@@ -1,0 +1,29 @@
+# Keep the build context tiny and the image clean.
+# NOTE: pyproject.toml, uv.lock and app/ are required by the Dockerfile.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local data / secrets
+*.db
+.env
+
+# Caches & tooling
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# VCS, docs, dev-only files
+.git/
+.gitignore
+tests/
+*.md
+Makefile
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# graphify knowledge-graph output
+graphify-out/

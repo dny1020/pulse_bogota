@@ -1,0 +1,79 @@
+# Deploy en la Raspberry Pi (pull-based desde GHCR)
+
+GitHub Actions construye y publica `ghcr.io/jnarvaar/pulse_bogota` en cada push a `main`.
+La Pi hace pull cada 5 minutos vía systemd timer — sin puertos expuestos, sin runners.
+
+## Setup (una sola vez)
+
+```bash
+# 1. copiar artefactos
+scp infra/compose.yaml infra/deploy.sh rpi:/opt/pulse/
+scp infra/pulse-deploy.* rpi:/tmp/
+
+ssh rpi
+chmod +x /opt/pulse/deploy.sh
+# /opt/pulse/.env debe tener: TOMTOM_API_KEY=..., etc. según los collectors que quieras activar
+
+# 2. instalar el timer
+sudo mv /tmp/pulse-deploy.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now pulse-deploy.timer
+
+# 3. primer deploy + verificación
+sudo systemctl start pulse-deploy.service
+journalctl -u pulse-deploy -n 20
+```
+
+## Operación
+
+```bash
+systemctl list-timers pulse-deploy.timer   # próxima ejecución
+journalctl -u pulse-deploy -f              # logs de deploys
+sudo systemctl start pulse-deploy.service  # forzar deploy ahora
+docker logs pulse                           # logs de la app
+```
+
+## Rollback
+
+```bash
+# pin a una versión anterior publicada en GHCR
+sed -i 's|pulse_bogota:latest|pulse_bogota:0.7|' /opt/pulse/compose.yaml
+sudo systemctl start pulse-deploy.service
+# (revertir el pin después de arreglar main)
+```
+
+## Backups
+
+El estado vive en el volumen Docker `pulse_data` que contiene `pulse_bogota.db`.
+`backup.sh` para la API, copia la DB, y la reinicia. Conserva los últimos
+`PULSE_BACKUP_KEEP` snapshots (7 por defecto).
+
+```bash
+# setup (una sola vez)
+scp infra/backup.sh infra/restore.sh rpi:/opt/pulse/
+scp infra/pulse-backup.* rpi:/tmp/
+ssh rpi
+chmod +x /opt/pulse/backup.sh /opt/pulse/restore.sh
+sudo mv /tmp/pulse-backup.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now pulse-backup.timer   # diario 03:30
+
+# a mano
+sudo /opt/pulse/backup.sh                        # snapshot ahora
+ls /mnt/ssd/pulse-backups                         # snapshots disponibles
+```
+
+Variables: `PULSE_BACKUP_DIR` (def. `/mnt/ssd/pulse-backups`), `PULSE_BACKUP_KEEP`
+(def. `7`), `PULSE_COMPOSE` (def. `/opt/pulse/compose.yaml`).
+
+## Restore
+
+```bash
+# para la app, restaura el snapshot y la vuelve a levantar (pide confirmación)
+sudo /opt/pulse/restore.sh /mnt/ssd/pulse-backups/20260618-033000
+```
+
+## Logs
+
+La app solo escribe a stdout (uvicorn). Se ven con `docker logs pulse` o
+`journalctl` (vía el driver de Docker).

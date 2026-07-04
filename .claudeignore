@@ -1,0 +1,22 @@
+# Virtual environment (large, third-party noise)
+.venv/
+
+# Caches (no source code)
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+
+# Generated output
+graphify-out/
+
+# Secrets
+.env
+
+# Binary files
+*.db
+*.sqlite3
+
+# OS
+.DS_Store
