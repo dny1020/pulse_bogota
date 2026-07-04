@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
-# pulse restore — restaura un snapshot creado por backup.sh.
-#   uso: restore.sh <dir-de-backup>   (p.ej. /mnt/ssd/pulse-backups/20260618-033000)
+# pulse restore — restore a snapshot created by backup.sh.
+#   usage: restore.sh <backup-dir>   (e.g. /mnt/ssd/pulse-backups/20260618-033000)
 set -euo pipefail
 
-SRC="${1:?uso: restore.sh <dir-de-backup>}"
+SRC="${1:?usage: restore.sh <backup-dir>}"
 COMPOSE="${PULSE_COMPOSE:-/opt/pulse/compose.yaml}"
 
-[ -f "$SRC/pulse_bogota.db" ] || { echo "no se encontró $SRC/pulse_bogota.db" >&2; exit 1; }
+[ -f "$SRC/pulse.sql.gz" ] || { echo "no $SRC/pulse.sql.gz found" >&2; exit 1; }
 
-echo "Esto SOBRESCRIBE la base de datos con el backup de $SRC."
-read -r -p "¿Continuar? [y/N] " ans
-case "$ans" in y|Y) ;; *) echo "cancelado"; exit 1 ;; esac
+echo "This OVERWRITES the database with the backup from $SRC."
+read -r -p "Continue? [y/N] " ans
+case "$ans" in y|Y) ;; *) echo "cancelled"; exit 1 ;; esac
 
-# Parar la app para que nadie escriba durante la restauración.
+# Stop the API so nothing writes during the restore.
 docker compose -f "$COMPOSE" stop api
 
-container_id=$(docker compose -f "$COMPOSE" ps -q api)
-docker cp "$SRC/pulse_bogota.db" "$container_id:/data/pulse_bogota.db"
+# Wipe the current schema, then replay the dump.
+docker compose -f "$COMPOSE" exec -T db psql -U pulse -d pulse \
+    -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+gunzip -c "$SRC/pulse.sql.gz" | docker compose -f "$COMPOSE" exec -T db psql -U pulse -d pulse
 
 docker compose -f "$COMPOSE" start api
-echo "restaurado desde $SRC"
+echo "restored from $SRC"

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `pulse_bogota` is a backend-only REST API (FastAPI) that helps you **discover quiet, interesting places in Bogotá without counting people**. It computes an **Activity Score (0–100)** from public signals (traffic, weather, events, popularity) so you can find a peaceful café, an uncrowded park, or a hidden viewpoint. A complementary **Discovery Score** rewards calm, well-rated, little-known spots — a quiet café can outrank a crowded landmark. MVP targets Bogotá but the design stays city-agnostic. `SPEC.md` is the product spec.
 
-Tech stack: Python 3.13+ · FastAPI + Uvicorn · Pydantic v2 + pydantic-settings · SQLAlchemy 2.x · SQLite · httpx · APScheduler · structlog · pytest · Ruff + Black · mypy.
+Tech stack: Python 3.13+ · FastAPI + Uvicorn · Pydantic v2 + pydantic-settings · SQLAlchemy 2.x · PostgreSQL (Docker/prod; SQLite for bare local dev + tests) · httpx · APScheduler · structlog · pytest · Ruff + Black · mypy.
 
 ## Commands
 
@@ -45,11 +45,11 @@ Layout: `app/{api,collectors,core,engine,scheduler,schemas,services,database}` +
 ## Conventions & constraints
 
 - **DB schema** is created with `Base.metadata.create_all()` in the `main.py` lifespan (no Alembic yet — deferred to a later phase). Seeding (`seed_places`) is idempotent (only runs on an empty table).
-- **Portability:** SQLite now, but keep models/queries dialect-neutral so PostgreSQL/PostGIS can drop in later without major changes.
+- **Portability:** PostgreSQL in Docker/prod, SQLite for bare local dev and tests — keep models/queries dialect-neutral so both engines behave the same (and PostGIS can drop in later).
 - **Tests** use an in-memory SQLite session injected via a `get_db` override; the `client` fixture deliberately skips the app lifespan, and `offline_collectors` patches collectors so no test hits the network (`tests/conftest.py`).
 - **Ruff config note:** `Depends()`/`Query()` in argument defaults are allowed via `extend-immutable-calls` in `pyproject.toml` — that's the intended FastAPI pattern, not a smell.
 - **Tooling:** uv manages deps (`uv sync`/`uv run`, lockfile `uv.lock`). The app is **not** installed as a package (`[tool.uv] package = false`), so tests rely on `pythonpath = ["."]` in `pyproject.toml` — run `uv run pytest` (or `python -m pytest`), never the bare `pytest` console script from a non-root dir.
-- **Docker/deploy:** `Dockerfile` (uv-based, arch-agnostic) + `docker-compose.yml` (SQLite on the `pulse_data` volume, `/health` healthcheck, `PULSE_IMAGE` overridable). Target is a Raspberry Pi 4 (arm64) pulling a GHCR image via CI/CD — the Pi pulls, never builds.
+- **Docker/deploy:** `Dockerfile` (uv-based, arch-agnostic) + `docker-compose.yml` (two services: `api` + `db` PostgreSQL 17; data on the `pulse_pgdata` volume, `POSTGRES_PASSWORD` required in `.env`, `/health` healthcheck, `PULSE_IMAGE` overridable). Target is a Raspberry Pi 4 (arm64) pulling a GHCR image via CI/CD — the Pi pulls, never builds (`infra/compose.yaml` mirrors the same two-service stack; backups via `pg_dump` in `infra/backup.sh`).
 - **Out of scope (don't add unasked):** frontend, auth, Redis/Celery, caching layer, vector DB, real ML model.
 
 ## Coding Style & Complexity Rules (Junior/Mid Developer Level)

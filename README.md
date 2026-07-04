@@ -62,7 +62,8 @@ Run `make help` for all tasks.
 
 ## Docker
 
-Local build & run (data persists in the `pulse_data` volume):
+Compose runs two containers: the **api** and **PostgreSQL** (`db`). Set
+`POSTGRES_PASSWORD` in `.env` first (see `.env.example`), then:
 
 ```bash
 make docker-up        # docker compose up --build -d
@@ -70,10 +71,14 @@ make docker-logs      # follow logs
 make docker-down      # stop
 ```
 
-The SQLite DB lives on the `pulse_data` named volume (`/data/pulse_bogota.db`),
-so the database **and all History survive** restarts and image rebuilds. API
-keys are passed as environment variables in `docker-compose.yml` (or via an
-`.env` file). SQLite is single-writer: run **one** replica only.
+PostgreSQL data lives on the `pulse_pgdata` named volume, so the database
+**and all History survive** restarts and image rebuilds. API keys and
+`POSTGRES_PASSWORD` are read from `.env`; the api container waits for the db
+healthcheck before starting.
+
+Outside Docker (bare `uvicorn --reload` and the test suite) the app defaults
+to SQLite — no PostgreSQL needed for local development. The models and queries
+are dialect-neutral, so both engines behave the same.
 
 ## Deployment (next phase)
 
@@ -93,8 +98,8 @@ GitHub.
 
 - `docker-compose.yml` already reads `PULSE_IMAGE` (defaults to a local build
   tag) and defines a `/health` healthcheck for safe rollouts.
-- For multiple replicas / heavier load, switch `DATABASE_URL` to PostgreSQL —
-  the models are dialect-neutral, so no code changes are needed.
+- The deployment compose (`infra/compose.yaml`) runs the same api + PostgreSQL
+  pair; backups use `pg_dump` (`infra/backup.sh`).
 
 See `CLAUDE.md` for architecture and conventions, and `SPEC.md` for the product
 spec.

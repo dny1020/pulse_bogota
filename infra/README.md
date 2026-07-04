@@ -12,7 +12,9 @@ scp infra/pulse-deploy.* rpi:/tmp/
 
 ssh rpi
 chmod +x /opt/pulse/deploy.sh
-# /opt/pulse/.env debe tener: TOMTOM_API_KEY=..., etc. según los collectors que quieras activar
+# /opt/pulse/.env debe tener:
+#   POSTGRES_PASSWORD=...   (obligatorio — genera uno: openssl rand -hex 24)
+#   TOMTOM_API_KEY=..., etc. según los collectors que quieras activar
 
 # 2. instalar el timer
 sudo mv /tmp/pulse-deploy.{service,timer} /etc/systemd/system/
@@ -44,9 +46,10 @@ sudo systemctl start pulse-deploy.service
 
 ## Backups
 
-El estado vive en el volumen Docker `pulse_data` que contiene `pulse_bogota.db`.
-`backup.sh` para la API, copia la DB, y la reinicia. Conserva los últimos
-`PULSE_BACKUP_KEEP` snapshots (7 por defecto).
+El estado vive en el volumen Docker `pulse_pgdata` (PostgreSQL). `backup.sh`
+hace un `pg_dump` comprimido sin parar la API (pg_dump toma un snapshot
+consistente por sí solo). Conserva los últimos `PULSE_BACKUP_KEEP` snapshots
+(7 por defecto).
 
 ```bash
 # setup (una sola vez)
@@ -69,7 +72,8 @@ Variables: `PULSE_BACKUP_DIR` (def. `/mnt/ssd/pulse-backups`), `PULSE_BACKUP_KEE
 ## Restore
 
 ```bash
-# para la app, restaura el snapshot y la vuelve a levantar (pide confirmación)
+# para la API, limpia el esquema, restaura el dump y la vuelve a levantar
+# (pide confirmación)
 sudo /opt/pulse/restore.sh /mnt/ssd/pulse-backups/20260618-033000
 ```
 
