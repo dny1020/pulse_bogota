@@ -27,7 +27,7 @@ def example_env_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     Keeps tests deterministic: real credentials in the developer's .env (or
     exported in the shell) must never reach the collectors.
     """
-    for var in ("TOMTOM_API_KEY", "EVENTBRITE_API_KEY", "GOOGLE_PLACES_API_KEY"):
+    for var in ("TOMTOM_API_KEY", "GOOGLE_PLACES_API_KEY"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setitem(Settings.model_config, "env_file", str(_ENV_EXAMPLE))
     get_settings.cache_clear()

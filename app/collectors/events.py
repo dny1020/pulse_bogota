@@ -1,45 +1,24 @@
-"""Events collector backed by the Eventbrite API (key-gated)."""
+"""Events collector — no provider wired yet, always returns ``None``.
+
+The events signal (weight 0.20) stays in the engine: a ``None`` sub-score is
+dropped and the remaining weights are renormalised, exactly like any other
+disabled collector. When an events provider is chosen, implement the real
+HTTP client here and add its key to ``core/config.py``.
+"""
 
 from __future__ import annotations
 
-import httpx
-
-from app.core.config import get_settings
-from app.core.logging import get_logger
 from app.database.models import Place
-
-log = get_logger(__name__)
-
-_EVENTBRITE_URL = "https://www.eventbriteapi.com/v3/events/search/"
 
 
 def fetch_event_score(place: Place) -> float | None:
-    """Return a 0-100 score from the count of nearby events, or ``None``.
+    """Return a 0-100 score from nearby events, or ``None`` while disabled.
 
-    More events within a short radius means the area is likely busier. 20+
-    nearby events saturate the score at 100.
+    Args:
+        place: The place to score (unused until a provider is wired).
+
+    Returns:
+        Always ``None`` for now — the signal is dropped and the activity
+        score is computed from the remaining collectors.
     """
-    settings = get_settings()
-    if not settings.eventbrite_api_key:
-        return None
-
-    params: dict[str, str | float] = {
-        "location.latitude": place.latitude,
-        "location.longitude": place.longitude,
-        "location.within": "2km",
-    }
-    headers = {"Authorization": f"Bearer {settings.eventbrite_api_key}"}
-    try:
-        resp = httpx.get(
-            _EVENTBRITE_URL,
-            params=params,
-            headers=headers,
-            timeout=settings.http_timeout_seconds,
-        )
-        resp.raise_for_status()
-        count = int(resp.json().get("pagination", {}).get("object_count", 0))
-    except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
-        log.warning("events_collector_failed", place_id=place.id, error=str(exc))
-        return None
-
-    return round(min(count / 20.0, 1.0) * 100, 2)
+    return None

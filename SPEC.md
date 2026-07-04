@@ -88,7 +88,7 @@ scoring functions live in `engine/score.py`.
 | --- | --- | --- |
 | Weather | Open-Meteo | none (always on) |
 | Traffic | TomTom | required, else disabled |
-| Events | Eventbrite | required, else disabled |
+| Events | — (no provider wired yet) | n/a — always disabled for now |
 | Metadata | Google Places | required, else disabled |
 
 Each collector calls its real API; a missing key or failed request returns no

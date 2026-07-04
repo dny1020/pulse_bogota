@@ -29,8 +29,10 @@ The **activity score** is a weighted blend: `traffic 40% · weather 25% · event
 20% · popularity 15%`. Collectors call real APIs and **degrade gracefully**: if
 an API key is missing or a request fails, that signal is dropped, the remaining
 weights are renormalised, and `confidence` (share of weight available) drops.
-Only Open-Meteo (weather) works with no key; add `TOMTOM_API_KEY`,
-`EVENTBRITE_API_KEY` and/or `GOOGLE_PLACES_API_KEY` to `.env` to enable the rest.
+Only Open-Meteo (weather) works with no key; add `TOMTOM_API_KEY` and/or
+`GOOGLE_PLACES_API_KEY` to `.env` to enable the rest. The events collector has
+no provider wired yet and always contributes `None` (its weight is
+renormalised away).
 
 The **discovery score** rewards calm, well-rated, little-known places, so a
 quiet café can rank above a crowded landmark.

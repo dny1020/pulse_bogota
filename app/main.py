@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api import (
     activity,
@@ -36,9 +37,14 @@ log = get_logger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialise DB + seed data and manage the scheduler lifecycle."""
     configure_logging()
-    Base.metadata.create_all(bind=db_engine)
-    with SessionLocal() as db:
-        inserted = seed_places(db)
+    try:
+        Base.metadata.create_all(bind=db_engine)
+        with SessionLocal() as db:
+            inserted = seed_places(db)
+    except SQLAlchemyError as exc:
+        # Fail fast with a clear log; the container restart policy retries.
+        log.error("startup_db_failed", error=str(exc))
+        raise
     log.info("startup", seeded_places=inserted)
 
     settings = get_settings()

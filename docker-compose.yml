@@ -13,6 +13,12 @@ services:
       DATABASE_URL: "postgresql+psycopg://pulse:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/pulse"
       SCHEDULER_ENABLED: "true"
       SCHEDULER_INTERVAL_MINUTES: "15"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FILE: /app/logs/pulse_bogota.log
+    volumes:
+      # Local bind mount so log files survive restarts and are readable
+      # from the host (./logs/pulse_bogota.log).
+      - ./logs:/app/logs
     depends_on:
       db:
         condition: service_healthy

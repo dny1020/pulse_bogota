@@ -20,5 +20,8 @@ graphify-out/
 *.db
 *.sqlite3
 
+# Local log files (docker bind mount)
+logs/
+
 # OS
 .DS_Store

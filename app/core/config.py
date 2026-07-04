@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     app_name: str = "pulse_bogota"
     database_url: str = "sqlite:///./pulse_bogota.db"
 
+    # Logging: level name (DEBUG/INFO/WARNING/ERROR) and an optional file.
+    # When log_file is blank, logs go to the console only.
+    log_level: str = "INFO"
+    log_file: str | None = None
+
     scheduler_enabled: bool = True
     scheduler_interval_minutes: int = 15
 
@@ -30,7 +35,6 @@ class Settings(BaseSettings):
 
     # Optional external API keys (blank -> collector disabled).
     tomtom_api_key: str | None = None
-    eventbrite_api_key: str | None = None
     google_places_api_key: str | None = None
 
 

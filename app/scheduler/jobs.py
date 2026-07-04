@@ -13,9 +13,14 @@ log = get_logger(__name__)
 
 
 def _recalculate_job() -> None:
-    with SessionLocal() as db:
-        count = recalculate_all(db)
+    # Broad catch on purpose: a background job must log its failure and let
+    # the scheduler try again on the next interval, never die silently.
+    try:
+        with SessionLocal() as db:
+            count = recalculate_all(db)
         log.info("scheduled_recalculate", places=count)
+    except Exception as exc:
+        log.error("scheduled_recalculate_failed", error=str(exc))
 
 
 def start_scheduler() -> BackgroundScheduler:

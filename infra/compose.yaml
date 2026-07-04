@@ -8,11 +8,16 @@ services:
       DATABASE_URL: "postgresql+psycopg://pulse:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/pulse"
       SCHEDULER_ENABLED: "true"
       SCHEDULER_INTERVAL_MINUTES: "15"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FILE: /app/logs/pulse_bogota.log
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - /mnt/ssd/pulse_bogota/data:/data
+      # Local mount so log files survive container restarts and are
+      # readable from the host.
+      - /mnt/ssd/pulse_bogota/logs:/app/logs
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
       interval: 30s
