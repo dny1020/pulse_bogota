@@ -25,3 +25,9 @@ logs/
 
 # OS
 .DS_Store
+CLAUDE.md
+SPEC.md
+PLAN.md
+.graphifyignore
+.claudeignore
+
