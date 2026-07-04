@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What the project is
 
-`pulse_bogota` is a backend-only REST API (FastAPI) that estimates how busy a place is **without trying to count people**. It computes an **Activity Score (0–100)** from public signals (traffic, weather, events, popularity) so users can find quiet cafés, parks, viewpoints, etc. A complementary **Discovery Score** rewards calm, well-rated, little-known places (a quiet café can outrank a crowded landmark). MVP targets Bogotá but the design stays city-agnostic. `SPEC.md` is the product spec.
+`pulse_bogota` is a backend-only REST API (FastAPI) that helps you **discover quiet, interesting places in Bogotá without counting people**. It computes an **Activity Score (0–100)** from public signals (traffic, weather, events, popularity) so you can find a peaceful café, an uncrowded park, or a hidden viewpoint. A complementary **Discovery Score** rewards calm, well-rated, little-known spots — a quiet café can outrank a crowded landmark. MVP targets Bogotá but the design stays city-agnostic. `SPEC.md` is the product spec.
 
 Tech stack: Python 3.13+ · FastAPI + Uvicorn · Pydantic v2 + pydantic-settings · SQLAlchemy 2.x · SQLite · httpx · APScheduler · structlog · pytest · Ruff + Black · mypy.
 

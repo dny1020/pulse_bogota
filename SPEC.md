@@ -1,6 +1,6 @@
 # pulse_bogota — Software Specification
 
-> Discover quiet, interesting places instead of crowded ones.
+> Backend-only REST API to discover quiet, interesting places in Bogotá.
 
 ## 1. Vision
 
