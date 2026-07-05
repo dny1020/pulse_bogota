@@ -27,7 +27,7 @@ logs/
 .DS_Store
 CLAUDE.md
 SPEC.md
-PLAN.md
+plan.md
 .graphifyignore
 .claudeignore
 
