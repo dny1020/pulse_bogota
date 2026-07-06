@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.collectors import osm
 from app.collectors.osm import OsmPlace, _parse_element, _round_robin_by_category
-from app.database.models import Place
+from app.database.models import History, Place
 from app.services.importer import import_osm_places
 
 
@@ -64,7 +64,9 @@ def test_round_robin_keeps_every_category() -> None:
     assert any(place.category == "park" for place in picked)
 
 
-def test_import_creates_then_updates(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_import_creates_then_updates(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, offline_collectors: None
+) -> None:
     monkeypatch.setattr(osm, "fetch_osm_places", lambda limit: [_candidate()])
 
     first = import_osm_places(db_session)
@@ -75,6 +77,22 @@ def test_import_creates_then_updates(db_session: Session, monkeypatch: pytest.Mo
 
     total = db_session.scalar(select(func.count()).select_from(Place))
     assert total == 1
+
+
+def test_import_scores_new_places(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, offline_collectors: None
+) -> None:
+    """A freshly imported place gets a History row immediately."""
+    monkeypatch.setattr(osm, "fetch_osm_places", lambda limit: [_candidate()])
+
+    import_osm_places(db_session)
+
+    place = db_session.scalar(select(Place).where(Place.osm_id == "node/1"))
+    assert place is not None
+    history_count = db_session.scalar(
+        select(func.count()).select_from(History).where(History.place_id == place.id)
+    )
+    assert history_count == 1
 
 
 def test_import_adopts_existing_place_by_name(
@@ -92,7 +110,9 @@ def test_import_adopts_existing_place_by_name(
     assert adopted.name == "Café Prueba"
 
 
-def test_import_endpoint(seeded_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_import_endpoint(
+    seeded_client: TestClient, monkeypatch: pytest.MonkeyPatch, offline_collectors: None
+) -> None:
     monkeypatch.setattr(osm, "fetch_osm_places", lambda limit: [_candidate()])
     response = seeded_client.post("/importer/osm", params={"limit": 10})
     assert response.status_code == 200

@@ -13,9 +13,11 @@ from fastapi import FastAPI
 
 from app.api import (
     activity,
+    anomaly,
     collectors,
     discover,
     engine,
+    forecast,
     health,
     history,
     importer,
@@ -64,6 +66,8 @@ for router in (
     places.router,
     query.router,
     activity.router,
+    forecast.router,
+    anomaly.router,
     history.router,
     top.router,
     engine.router,

@@ -15,10 +15,14 @@ services:
       SCHEDULER_INTERVAL_MINUTES: "15"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FILE: /app/logs/pulse_bogota.log
+      # Trained forecast model lives on the ./data mount so it survives restarts.
+      FORECAST_MODEL_PATH: /app/data/forecast_model.joblib
     volumes:
       # Local bind mount so log files survive restarts and are readable
       # from the host (./logs/pulse_bogota.log).
       - ./logs:/app/logs
+      # Persists the trained forecast model artifact across restarts.
+      - ./data:/app/data
     depends_on:
       db:
         condition: service_healthy
