@@ -10,6 +10,8 @@ services:
       SCHEDULER_INTERVAL_MINUTES: "15"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FILE: /app/logs/pulse_bogota.log
+      # Trained forecast model lives on the SSD mount so it survives restarts.
+      FORECAST_MODEL_PATH: /app/data/forecast_model.joblib
     depends_on:
       db:
         condition: service_healthy
@@ -17,6 +19,8 @@ services:
       # Local mount so log files survive container restarts and are
       # readable from the host.
       - /mnt/ssd/pulse_bogota/logs:/app/logs
+      # Persists the trained forecast model artifact across restarts.
+      - /mnt/ssd/pulse_bogota/data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
       interval: 30s

@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     osm_import_enabled: bool = True
     osm_import_limit: int = 50
     osm_bbox: str = "4.47,-74.20,4.83,-73.99"
+    # The catalogue grows over time: each run imports up to a limit derived from
+    # how many places already exist (place_count * growth), capped at the max.
+    osm_import_limit_max: int = 500
+    osm_import_growth: float = 1.2
 
     default_city: str = "Bogotá"
     default_country: str = "Colombia"
@@ -48,6 +52,20 @@ class Settings(BaseSettings):
     tomtom_api_key: str | None = None
     google_places_api_key: str | None = None
     ticketmaster_api_key: str | None = None
+
+    # Activity forecasting. A weekly job trains a model into forecast_model_path;
+    # it is only used for a place once it has forecast_min_samples History rows,
+    # otherwise the hourly-profile baseline is used (graceful degradation).
+    forecast_enabled: bool = True
+    forecast_min_samples: int = 200
+    forecast_model_path: str = "./data/forecast_model.joblib"
+
+    # Weekly Google Places refresh to keep ratings (popularity/discovery) fresh.
+    google_refresh_enabled: bool = True
+
+    # Anomaly detection: flag unusual days per place with a rolling z-score.
+    anomaly_detection_enabled: bool = True
+    anomaly_zscore_threshold: float = 3.0
 
 
 @lru_cache
