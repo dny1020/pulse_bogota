@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app import __version__
 from app.api import (
     activity,
     anomaly,
@@ -59,7 +60,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             shutdown_scheduler(scheduler)
 
 
-app = FastAPI(title="pulse_bogota", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="pulse_bogota", version=__version__, lifespan=lifespan)
 
 for router in (
     health.router,

@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from app import __version__
+
 
 def test_health(client: TestClient) -> None:
-    assert client.get("/health").json() == {"status": "ok"}
+    body = client.get("/health").json()
+    assert body["status"] == "ok"
+    assert body["version"] == __version__
 
 
 def test_seed_is_listed(seeded_client: TestClient) -> None:
