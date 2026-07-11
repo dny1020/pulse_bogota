@@ -68,6 +68,11 @@ def start_scheduler() -> BackgroundScheduler:
     Scoring runs on a fixed interval (default 15 min); OSM import, forecast
     training, Google refresh and anomaly scanning run weekly, each gated by its
     own settings flag.
+
+    Weekly jobs use cron triggers (staggered on Sunday early morning) instead
+    of interval ones: an interval trigger only fires N days after scheduler
+    start, so any container restart within the week resets the countdown and
+    the job never runs.
     """
     settings = get_settings()
     scheduler = BackgroundScheduler(timezone="America/Bogota")
@@ -81,32 +86,36 @@ def start_scheduler() -> BackgroundScheduler:
     if settings.osm_import_enabled:
         scheduler.add_job(
             _osm_import_job,
-            "interval",
-            weeks=1,
+            "cron",
+            day_of_week="sun",
+            hour=3,
             id="import_osm_places",
             replace_existing=True,
         )
     if settings.forecast_enabled:
         scheduler.add_job(
             _train_forecast_job,
-            "interval",
-            weeks=1,
+            "cron",
+            day_of_week="sun",
+            hour=4,
             id="train_forecast",
             replace_existing=True,
         )
     if settings.google_refresh_enabled and settings.google_places_api_key:
         scheduler.add_job(
             _google_refresh_job,
-            "interval",
-            weeks=1,
+            "cron",
+            day_of_week="sun",
+            hour=5,
             id="google_refresh",
             replace_existing=True,
         )
     if settings.anomaly_detection_enabled:
         scheduler.add_job(
             _anomaly_scan_job,
-            "interval",
-            weeks=1,
+            "cron",
+            day_of_week="sun",
+            hour=6,
             id="anomaly_scan",
             replace_existing=True,
         )
