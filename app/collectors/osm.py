@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 import httpx
 
+from app import __version__
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -18,6 +19,9 @@ log = get_logger(__name__)
 
 _OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 _OVERPASS_TIMEOUT_SECONDS = 60.0
+# Overpass rejects generic library User-Agents with 406; OSM policy asks for
+# an identifying one with a contact point.
+_USER_AGENT = f"pulse-bogota/{__version__} (github.com/dny1020/pulse_bogota)"
 
 # OSM tag=value -> our place category (only discovery-friendly categories).
 _TAG_CATEGORIES: dict[tuple[str, str], str] = {
@@ -112,7 +116,12 @@ def fetch_osm_places(limit: int) -> list[OsmPlace]:
     settings = get_settings()
     query = _build_query(settings.osm_bbox)
     try:
-        resp = httpx.post(_OVERPASS_URL, data={"data": query}, timeout=_OVERPASS_TIMEOUT_SECONDS)
+        resp = httpx.post(
+            _OVERPASS_URL,
+            data={"data": query},
+            timeout=_OVERPASS_TIMEOUT_SECONDS,
+            headers={"User-Agent": _USER_AGENT},
+        )
         resp.raise_for_status()
         elements = resp.json().get("elements", [])
     except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
