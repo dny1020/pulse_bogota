@@ -17,7 +17,6 @@ cp .env.example .env          # optional; all API keys are optional
 uv run uvicorn app.main:app --reload
 ```
 
-Or use the Makefile: `make install` then `make run`.
 
 Open Swagger at <http://127.0.0.1:8000/docs>. On first start Alembic migrations
 create the schema and ~14 real Bogotá places are seeded; the scheduler then
@@ -57,13 +56,10 @@ quiet café can rank above a crowded landmark.
 ## Development
 
 ```bash
-make check        # ruff + black --check + mypy + pytest
-# or individually:
-uv run pytest                                  # tests (offline; network is mocked)
-uv run ruff check . && uv run black --check . && uv run mypy app
+make test         # pytest (offline; network is mocked)
+make lint         # ruff + black --check + mypy (same gate as CI)
+make bump-patch   # version bump + commit + git tag (also: bump-minor, bump-major)
 ```
-
-Run `make help` for all tasks.
 
 ## Docker
 
@@ -71,9 +67,9 @@ Compose runs two containers: the **api** and **PostgreSQL** (`db`). Set
 `POSTGRES_PASSWORD` in `.env` first (see `.env.example`), then:
 
 ```bash
-make docker-up        # docker compose up --build -d
-make docker-logs      # follow logs
-make docker-down      # stop
+docker compose up --build -d
+docker compose logs -f
+docker compose down
 ```
 
 PostgreSQL data lives on the `pulse_pgdata` named volume, so the database

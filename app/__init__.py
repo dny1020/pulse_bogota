@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version
+import tomllib
+from pathlib import Path
+
+# Single source of truth: the version in pyproject.toml. The file is present
+# both in the repo (local dev/tests) and in the Docker image (copied to /app).
+_PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 
 try:
-    # Single source of truth: the version declared in pyproject.toml.
-    __version__ = version("pulse-bogota")
-except PackageNotFoundError:
-    # The app runs with `[tool.uv] package = false`, so it may not be installed
-    # as a distribution (e.g. `uv run uvicorn ...`). Fall back to the current
-    # release; keep this in sync with pyproject.toml on each bump.
-    __version__ = "0.2.0"
+    with _PYPROJECT.open("rb") as fh:
+        __version__: str = tomllib.load(fh)["project"]["version"]
+except (OSError, KeyError):
+    # Unexpected layout (e.g. pyproject.toml not shipped): report a neutral
+    # version instead of crashing the app at import time.
+    __version__ = "0.0.0"
