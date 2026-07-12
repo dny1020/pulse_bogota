@@ -1,6 +1,6 @@
 [project]
 name = "pulse-bogota"
-version = "0.2.0"
+version = "0.2.1"
 description = "Activity & discovery scoring API for places in Bogotá"
 requires-python = ">=3.13"
 dependencies = [
