@@ -103,8 +103,12 @@ GitHub.
 
 - `docker-compose.yml` already reads `PULSE_IMAGE` (defaults to a local build
   tag) and defines a `/health` healthcheck for safe rollouts.
-- The deployment compose (`infra/compose.yaml`) runs the same api + PostgreSQL
-  pair; backups use `pg_dump` (`infra/backup.sh`).
+- Deployment is manual by design: the production `compose.yaml` and `.env` live
+  only on the Pi (`/opt/pulse_bogota/`) and are copied over with `scp` when they
+  change. After CI publishes a new image, deploy with
+  `docker compose pull && docker compose up -d` on the Pi.
+- Backups are manual too:
+  `docker exec pulse-db pg_dump -U pulse pulse | gzip > backup.sql.gz`.
 
 See `CLAUDE.md` for architecture and conventions, `SPEC.md` for the product
 spec (as built), and `plan.md` for future work.
