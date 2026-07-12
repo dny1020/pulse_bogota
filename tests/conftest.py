@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.collectors import events, traffic, weather
+from app.collectors import air, events, traffic, weather
 from app.core.config import Settings, get_settings
 from app.database.database import Base, get_db
 from app.database.seed import seed_places
@@ -90,3 +90,8 @@ def offline_collectors(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(traffic, "fetch_traffic", lambda place: None)
     monkeypatch.setattr(events, "fetch_events", lambda place: None)
+    monkeypatch.setattr(
+        air,
+        "fetch_air",
+        lambda place: air.AirReading(score=70.0, pm2_5=12.5, european_aqi=30.0),
+    )

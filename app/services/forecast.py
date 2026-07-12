@@ -21,10 +21,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.database.models import History, Place
+from app.database.models import Feedback, History, Place
 from app.engine import forecast as engine
 from app.engine.score import status_label
-from app.schemas.forecast import ForecastPoint, ForecastResponse
+from app.schemas.forecast import BestTimeResponse, ForecastPoint, ForecastResponse
+from app.services.feedback import LEVEL_TO_SCORE
 from app.services.scoring import history_for_place
 
 log = get_logger(__name__)
@@ -48,6 +49,8 @@ def forecast_place(db: Session, place: Place, hours: int) -> ForecastResponse:
     place_average = sum(row.activity_score for row in rows) / len(rows) if rows else None
     recent_mean = place_average if place_average is not None else 50.0
     last_activity = float(rows[0].activity_score) if rows else 50.0
+    # Future raw signals are unknown: assume the latest captured values persist.
+    latest = rows[0] if rows else None
 
     settings = get_settings()
     model = _load_model() if len(rows) >= settings.forecast_min_samples else None
@@ -58,7 +61,7 @@ def forecast_place(db: Session, place: Place, hours: int) -> ForecastResponse:
         target = now + timedelta(hours=step)
         if model is not None:
             score, confidence, used = _predict_with_model(
-                model, target, place, recent_mean, last_activity
+                model, target, place, recent_mean, last_activity, latest
             )
         else:
             score, confidence = engine.predict_baseline(profile, place_average, target)
@@ -79,12 +82,38 @@ def forecast_place(db: Session, place: Place, hours: int) -> ForecastResponse:
     )
 
 
+def best_time(db: Session, place: Place, hours: int) -> BestTimeResponse:
+    """Answer "what time should I go?" for the next ``hours`` hours.
+
+    Reuses :func:`forecast_place` and picks the quietest predicted hour as
+    ``best`` and the busiest as ``worst`` (earliest hour wins ties).
+
+    Args:
+        db: Database session.
+        place: The place to evaluate (already validated to exist).
+        hours: How many future hours to consider.
+
+    Returns:
+        A :class:`BestTimeResponse` with the best and worst hour to visit.
+    """
+    forecast = forecast_place(db, place, hours)
+    best = min(forecast.points, key=lambda point: point.score)
+    worst = max(forecast.points, key=lambda point: point.score)
+    return BestTimeResponse(
+        place_id=place.id,
+        generated_at=forecast.generated_at,
+        best=best,
+        worst=worst,
+    )
+
+
 def _predict_with_model(
     bundle: dict[str, object],
     target: datetime,
     place: Place,
     recent_mean: float,
     last_activity: float,
+    latest: History | None,
 ) -> tuple[int, float, str]:
     """Predict one point with the trained model; confidence derives from its MAE."""
     features = engine.build_feature_row(
@@ -93,6 +122,13 @@ def _predict_with_model(
         longitude=place.longitude,
         recent_mean=recent_mean,
         last_activity=last_activity,
+        temperature_c=latest.temperature_c if latest else None,
+        precipitation_mm=latest.precipitation_mm if latest else None,
+        speed_ratio=engine.speed_ratio_from(
+            latest.current_speed_kmh if latest else None,
+            latest.free_flow_speed_kmh if latest else None,
+        ),
+        event_count=latest.event_count if latest else None,
     )
     estimator = bundle["model"]
     prediction = float(estimator.predict([features])[0])  # type: ignore[attr-defined]
@@ -102,16 +138,25 @@ def _predict_with_model(
 
 
 def _load_model() -> dict[str, object] | None:
-    """Load the trained model bundle from disk, or ``None`` if unavailable."""
+    """Load the trained model bundle from disk, or ``None`` if unavailable.
+
+    A bundle trained on a different feature layout is rejected (returns
+    ``None`` → baseline applies) instead of crashing predictions with a shape
+    mismatch; the next weekly training run replaces it.
+    """
     path = get_settings().forecast_model_path
     if not os.path.exists(path):
         log.info("forecast_model_missing", path=path)
         return None
     try:
-        return joblib.load(path)
+        bundle: dict[str, object] = joblib.load(path)
     except Exception as exc:  # pragma: no cover - defensive
         log.error("forecast_model_load_failed", path=path, error=str(exc))
         return None
+    if bundle.get("feature_names") != engine.FEATURE_NAMES:
+        log.warning("forecast_model_stale_features", path=path)
+        return None
+    return bundle
 
 
 def train_model(db: Session) -> dict[str, object]:
@@ -174,11 +219,15 @@ def _build_training_samples(db: Session) -> list[tuple[datetime, list[float], in
 
     Lag features (``recent_mean``, ``last_activity``) are computed per place in
     chronological order so each sample only sees data available up to its time.
+    When a visitor feedback exists close in time to a History row, its mapped
+    score replaces the row's own estimate as the target — a real label beats
+    the system's guess.
     """
     places = {place.id: place for place in db.scalars(select(Place))}
     by_place: dict[int, list[History]] = defaultdict(list)
     for row in db.scalars(select(History)):
         by_place[row.place_id].append(row)
+    feedback_by_place = _feedback_targets(db)
 
     samples: list[tuple[datetime, list[float], int]] = []
     for place_id, rows in by_place.items():
@@ -199,16 +248,54 @@ def _build_training_samples(db: Session) -> list[tuple[datetime, list[float], in
                 longitude=place.longitude,
                 recent_mean=recent_mean,
                 last_activity=last_activity,
+                temperature_c=row.temperature_c,
+                precipitation_mm=row.precipitation_mm,
+                speed_ratio=engine.speed_ratio_from(row.current_speed_kmh, row.free_flow_speed_kmh),
+                event_count=row.event_count,
             )
-            samples.append((row.created_at, features, row.activity_score))
+            target_score = _feedback_target_for(feedback_by_place.get(place_id, []), row.created_at)
+            samples.append(
+                (
+                    row.created_at,
+                    features,
+                    target_score if target_score is not None else row.activity_score,
+                )
+            )
             running_sum += row.activity_score
             previous = row
     return samples
 
 
+# A feedback counts as ground truth for History rows within this window.
+_FEEDBACK_WINDOW = timedelta(minutes=90)
+
+
+def _feedback_targets(db: Session) -> dict[int, list[tuple[datetime, int]]]:
+    """Load all feedback as ``place_id -> [(created_at, mapped_score)]``."""
+    targets: dict[int, list[tuple[datetime, int]]] = defaultdict(list)
+    for row in db.scalars(select(Feedback)):
+        score = LEVEL_TO_SCORE.get(row.level)
+        if score is not None:
+            targets[row.place_id].append((row.created_at, score))
+    return targets
+
+
+def _feedback_target_for(feedback: list[tuple[datetime, int]], moment: datetime) -> int | None:
+    """Return the mapped score of the feedback closest to ``moment``, or ``None``.
+
+    Only feedback within ``_FEEDBACK_WINDOW`` of the History row qualifies.
+    """
+    best: tuple[timedelta, int] | None = None
+    for created_at, score in feedback:
+        distance = abs(created_at - moment)
+        if distance <= _FEEDBACK_WINDOW and (best is None or distance < best[0]):
+            best = (distance, score)
+    return best[1] if best else None
+
+
 def _persist_model(model: HistGradientBoostingRegressor, mae: float, path: str) -> None:
-    """Serialise the trained model and its MAE to ``path``."""
+    """Serialise the trained model, its MAE and the feature layout to ``path``."""
     directory = os.path.dirname(path)
     if directory:
         os.makedirs(directory, exist_ok=True)
-    joblib.dump({"model": model, "mae": mae}, path)
+    joblib.dump({"model": model, "mae": mae, "feature_names": engine.FEATURE_NAMES}, path)

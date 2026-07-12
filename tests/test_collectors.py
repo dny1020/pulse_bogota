@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.collectors import events, google, traffic, weather
+from app.collectors import air, events, google, traffic, weather
+from app.collectors.air import score_from_aqi
 from app.collectors.weather import score_from_conditions
 from app.core.config import Settings
 from app.database.models import Place
@@ -59,6 +60,36 @@ def test_keyed_collectors_disabled_without_key() -> None:
     assert traffic.fetch_traffic_score(place) is None
     assert events.fetch_event_score(place) is None
     assert google.fetch_place_metadata(place) is None
+
+
+def test_air_score_from_aqi_is_pure() -> None:
+    assert score_from_aqi(0.0) == 100.0
+    assert score_from_aqi(40.0) == 60.0
+    assert score_from_aqi(250.0) == 0.0  # clamped: extremely poor air
+
+
+def test_air_fetch_parses_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {"current": {"pm2_5": 12.5, "european_aqi": 30}}
+    monkeypatch.setattr(air.httpx, "get", lambda *a, **k: _FakeResponse(payload))
+    reading = air.fetch_air(_place())
+    assert reading is not None
+    assert reading.pm2_5 == 12.5
+    assert reading.european_aqi == 30.0
+    assert reading.score == 70.0
+
+
+def test_air_fetch_degrades_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(*args: object, **kwargs: object) -> None:
+        raise air.httpx.HTTPError("network down")
+
+    monkeypatch.setattr(air.httpx, "get", boom)
+    assert air.fetch_air_score(_place()) is None
+
+
+def test_air_fetch_degrades_without_aqi(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {"current": {"pm2_5": None, "european_aqi": None}}
+    monkeypatch.setattr(air.httpx, "get", lambda *a, **k: _FakeResponse(payload))
+    assert air.fetch_air(_place()) is None
 
 
 def test_event_score_from_count_is_pure() -> None:

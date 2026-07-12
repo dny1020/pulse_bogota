@@ -1,14 +1,16 @@
 """Flag unusual activity readings per place with a simple z-score.
 
-Cheap and model-free (plan.md item 4): for each place we compare every History
-reading against that place's own mean and standard deviation, and flag the ones
-whose absolute z-score crosses a threshold. Useful for spotting a surprisingly
-busy (or dead) day without any training data.
+Cheap and model-free: each History reading is compared against its own
+``(hour, weekday)`` cell (same bucketing as the forecast baseline) so "busy at
+8pm" is judged against other 8pm readings, not the whole day. Cells with too
+few samples fall back to the place's global distribution — the original
+behaviour — so sparse places still get anomaly detection.
 """
 
 from __future__ import annotations
 
 import statistics
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -50,11 +52,25 @@ def detect_anomalies(
         scores = [row.activity_score for row in rows]
         if len(scores) < _MIN_READINGS:
             continue
-        mean = statistics.mean(scores)
-        std = statistics.pstdev(scores)
-        if std == 0:
-            continue
+        global_mean = statistics.mean(scores)
+        global_std = statistics.pstdev(scores)
+
+        cells: dict[tuple[int, int], list[int]] = {}
         for row in rows:
+            key = (row.created_at.hour, row.created_at.weekday())
+            cells.setdefault(key, []).append(row.activity_score)
+
+        for row in rows:
+            cell_scores = cells[(row.created_at.hour, row.created_at.weekday())]
+            basis: Literal["hourly", "global"]
+            if len(cell_scores) >= _MIN_READINGS:
+                mean = statistics.mean(cell_scores)
+                std = statistics.pstdev(cell_scores)
+                basis = "hourly"
+            else:
+                mean, std, basis = global_mean, global_std, "global"
+            if std == 0:
+                continue
             z_score = (row.activity_score - mean) / std
             if abs(z_score) >= limit:
                 anomalies.append(
@@ -65,6 +81,7 @@ def detect_anomalies(
                         z_score=round(z_score, 2),
                         mean=round(mean, 2),
                         std=round(std, 2),
+                        basis=basis,
                     )
                 )
     return anomalies

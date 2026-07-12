@@ -18,6 +18,7 @@ from app.api import (
     collectors,
     discover,
     engine,
+    feedback,
     forecast,
     health,
     history,
@@ -75,5 +76,6 @@ for router in (
     collectors.router,
     discover.router,
     importer.router,
+    feedback.router,
 ):
     app.include_router(router)

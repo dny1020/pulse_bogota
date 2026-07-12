@@ -45,6 +45,9 @@ class Place(Base):
     history: Mapped[list[History]] = relationship(
         back_populates="place", cascade="all, delete-orphan"
     )
+    feedback: Mapped[list[Feedback]] = relationship(
+        back_populates="place", cascade="all, delete-orphan"
+    )
 
 
 class History(Base):
@@ -73,6 +76,8 @@ class History(Base):
     )
     place_rating: Mapped[float | None] = mapped_column(Float, default=None)
     place_rating_count: Mapped[int | None] = mapped_column(Integer, default=None)
+    pm2_5: Mapped[float | None] = mapped_column(Float, default=None)
+    european_aqi: Mapped[float | None] = mapped_column(Float, default=None)
 
     confidence: Mapped[float] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(
@@ -80,3 +85,23 @@ class History(Base):
     )
 
     place: Mapped[Place] = relationship(back_populates="history")
+
+
+class Feedback(Base):
+    """Ground-truth crowd report from a visitor ("it was quiet/moderate/busy").
+
+    These are the real labels the forecast model can learn from: a feedback
+    close in time to a History row overrides that row's training target.
+    """
+
+    __tablename__ = "feedback"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    place_id: Mapped[int] = mapped_column(ForeignKey("places.id", ondelete="CASCADE"), index=True)
+    # One of "quiet" / "moderate" / "busy" (validated at the API layer).
+    level: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, index=True
+    )
+
+    place: Mapped[Place] = relationship(back_populates="feedback")

@@ -21,3 +21,12 @@ class ForecastResponse(BaseModel):
     place_id: int
     generated_at: datetime
     points: list[ForecastPoint]
+
+
+class BestTimeResponse(BaseModel):
+    """Best (quietest) and worst (busiest) predicted hour to visit a place."""
+
+    place_id: int
+    generated_at: datetime
+    best: ForecastPoint
+    worst: ForecastPoint

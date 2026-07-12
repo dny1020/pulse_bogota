@@ -33,7 +33,35 @@ def test_detects_clear_outlier(db_session: Session) -> None:
     _add_history(db_session, place.id, points)
 
     anomalies = detect_anomalies(db_session, place_id=place.id)
-    assert any(anomaly.activity_score == 100 for anomaly in anomalies)
+    flagged = [anomaly for anomaly in anomalies if anomaly.activity_score == 100]
+    assert flagged
+    # Every (hour, weekday) cell has a single sample -> global fallback.
+    assert all(anomaly.basis == "global" for anomaly in flagged)
+
+
+def test_same_cell_outlier_uses_hourly_basis(db_session: Session) -> None:
+    place = _make_place(db_session)
+    monday_8am = datetime(2026, 6, 1, 8, tzinfo=UTC)  # a Monday
+    points = [(monday_8am + timedelta(weeks=w), 50) for w in range(10)]
+    points.append((monday_8am + timedelta(weeks=10), 100))  # unusual for Mondays 8am
+    _add_history(db_session, place.id, points)
+
+    anomalies = detect_anomalies(db_session, place_id=place.id)
+    flagged = [anomaly for anomaly in anomalies if anomaly.activity_score == 100]
+    assert flagged
+    assert flagged[0].basis == "hourly"
+
+
+def test_recurring_evening_peak_is_not_anomalous(db_session: Session) -> None:
+    """A place that is always busy at one hour must not be flagged for it."""
+    place = _make_place(db_session)
+    monday_8am = datetime(2026, 6, 1, 8, tzinfo=UTC)
+    monday_8pm = datetime(2026, 6, 1, 20, tzinfo=UTC)
+    points = [(monday_8am + timedelta(weeks=w), 20) for w in range(30)]
+    points += [(monday_8pm + timedelta(weeks=w), 90) for w in range(3)]  # normal peak
+    _add_history(db_session, place.id, points)
+
+    assert detect_anomalies(db_session, place_id=place.id) == []
 
 
 def test_flat_series_has_no_anomaly(db_session: Session) -> None:

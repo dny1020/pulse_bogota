@@ -26,6 +26,11 @@ def collect_events(db: Session = Depends(get_db)) -> dict[str, object]:
     return {"collector": "events", "results": scoring_service.run_signal_collector(db, "events")}
 
 
+@router.post("/air")
+def collect_air(db: Session = Depends(get_db)) -> dict[str, object]:
+    return {"collector": "air", "results": scoring_service.run_signal_collector(db, "air")}
+
+
 @router.post("/google")
 def collect_google(db: Session = Depends(get_db)) -> dict[str, object]:
     return {"collector": "google", "updated": scoring_service.run_google_enrichment(db)}

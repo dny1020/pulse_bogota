@@ -9,7 +9,7 @@ from __future__ import annotations
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from app.collectors import events, google, traffic, weather
+from app.collectors import air, events, google, traffic, weather
 from app.database.models import History, Place
 from app.engine.score import compute_activity, popularity_score, status_label
 from app.schemas.activity import ActivityRead
@@ -24,6 +24,8 @@ def score_place(db: Session, place: Place) -> History:
     traffic_reading = traffic.fetch_traffic(place)
     weather_reading = weather.fetch_weather(place)
     events_reading = events.fetch_events(place)
+    # Informative only: air quality never joins the activity blend.
+    air_reading = air.fetch_air(place)
     social_score = popularity_score(place.rating, place.rating_count)
 
     activity, confidence = compute_activity(
@@ -49,6 +51,8 @@ def score_place(db: Session, place: Place) -> History:
         next_event_starts_at=events_reading.next_event_starts_at if events_reading else None,
         place_rating=place.rating,
         place_rating_count=place.rating_count,
+        pm2_5=air_reading.pm2_5 if air_reading else None,
+        european_aqi=air_reading.european_aqi if air_reading else None,
         confidence=confidence,
     )
     db.add(record)
@@ -121,6 +125,7 @@ def run_signal_collector(db: Session, name: str) -> list[dict[str, object]]:
         "weather": weather.fetch_weather_score,
         "traffic": traffic.fetch_traffic_score,
         "events": events.fetch_event_score,
+        "air": air.fetch_air_score,
     }
     collector = collectors_by_name[name]
     return [

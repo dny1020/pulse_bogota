@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -16,3 +17,6 @@ class AnomalyPoint(BaseModel):
     z_score: float
     mean: float
     std: float
+    # What the reading was compared against: its own (hour, weekday) cell when
+    # that cell has enough samples, otherwise the place's global distribution.
+    basis: Literal["hourly", "global"]

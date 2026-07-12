@@ -62,6 +62,35 @@ def test_feature_row_flags_colombian_holiday() -> None:
     assert row[3] == 1.0  # is_holiday
 
 
+def test_feature_row_imputes_missing_raw_signals() -> None:
+    target = datetime(2026, 7, 6, 8, 0)
+    row = engine.build_feature_row(
+        target=target, latitude=4.6, longitude=-74.0, recent_mean=50.0, last_activity=40.0
+    )
+    # Missing raw signals get neutral values: Bogotá temp, dry, free flow, no events.
+    assert row[-4:] == [15.0, 0.0, 1.0, 0.0]
+
+    row = engine.build_feature_row(
+        target=target,
+        latitude=4.6,
+        longitude=-74.0,
+        recent_mean=50.0,
+        last_activity=40.0,
+        temperature_c=22.0,
+        precipitation_mm=3.5,
+        speed_ratio=0.4,
+        event_count=2,
+    )
+    assert row[-4:] == [22.0, 3.5, 0.4, 2.0]
+
+
+def test_speed_ratio_from_handles_missing_speeds() -> None:
+    assert engine.speed_ratio_from(30.0, 60.0) == 0.5
+    assert engine.speed_ratio_from(None, 60.0) is None
+    assert engine.speed_ratio_from(30.0, None) is None
+    assert engine.speed_ratio_from(30.0, 0.0) is None
+
+
 # --- service --------------------------------------------------------------
 
 
@@ -109,15 +138,23 @@ def test_train_model_runs_with_enough_data(
     assert "trained" in result and "mae" in result
 
 
+def _fit_dummy_model() -> HistGradientBoostingRegressor:
+    model = HistGradientBoostingRegressor(max_iter=10)
+    features = [
+        [float(h), 0.0, 0.0, 0.0, 4.6, -74.0, 50.0, 50.0, 15.0, 0.0, 1.0, 0.0] for h in range(24)
+    ] * 3
+    targets = [h * 2 for h in range(24)] * 3
+    model.fit(features, targets)
+    return model
+
+
 def test_forecast_uses_model_when_available(
     db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
-    model = HistGradientBoostingRegressor(max_iter=10)
-    features = [[float(h), 0.0, 0.0, 0.0, 4.6, -74.0, 50.0, 50.0] for h in range(24)] * 3
-    targets = [h * 2 for h in range(24)] * 3
-    model.fit(features, targets)
     path = tmp_path / "model.joblib"  # type: ignore[operator]
-    joblib.dump({"model": model, "mae": 5.0}, path)
+    joblib.dump(
+        {"model": _fit_dummy_model(), "mae": 5.0, "feature_names": engine.FEATURE_NAMES}, path
+    )
 
     monkeypatch.setenv("FORECAST_MODEL_PATH", str(path))
     monkeypatch.setenv("FORECAST_MIN_SAMPLES", "5")
@@ -130,6 +167,26 @@ def test_forecast_uses_model_when_available(
     response = forecast_service.forecast_place(db_session, place, hours=6)
     assert all(point.model == "gbm" for point in response.points)
     assert all(0 <= point.score <= 100 for point in response.points)
+
+
+def test_stale_model_falls_back_to_baseline(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    """A bundle trained on an older feature layout must be ignored, not crash."""
+    path = tmp_path / "model.joblib"  # type: ignore[operator]
+    # Old-format bundle: no feature_names (pre-versioning) -> stale.
+    joblib.dump({"model": _fit_dummy_model(), "mae": 5.0}, path)
+
+    monkeypatch.setenv("FORECAST_MODEL_PATH", str(path))
+    monkeypatch.setenv("FORECAST_MIN_SAMPLES", "5")
+    get_settings.cache_clear()
+
+    place = _make_place(db_session)
+    base = datetime(2026, 6, 1, 8, tzinfo=UTC)
+    _add_history(db_session, place.id, [(base + timedelta(hours=i), 40) for i in range(10)])
+
+    response = forecast_service.forecast_place(db_session, place, hours=6)
+    assert all(point.model == "baseline" for point in response.points)
 
 
 # --- endpoint -------------------------------------------------------------
@@ -146,3 +203,20 @@ def test_forecast_endpoint(client: TestClient, db_session: Session) -> None:
 
 def test_forecast_endpoint_unknown_place(client: TestClient) -> None:
     assert client.get("/forecast/999").status_code == 404
+
+
+def test_best_time_endpoint(client: TestClient, db_session: Session) -> None:
+    place = _make_place(db_session)
+    base = datetime(2026, 6, 1, 8, tzinfo=UTC)
+    points = [(base + timedelta(hours=i), (i * 10) % 100) for i in range(48)]
+    _add_history(db_session, place.id, points)
+
+    response = client.get(f"/forecast/{place.id}/best-time", params={"hours": 24})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["place_id"] == place.id
+    assert body["best"]["score"] <= body["worst"]["score"]
+
+
+def test_best_time_endpoint_unknown_place(client: TestClient) -> None:
+    assert client.get("/forecast/999/best-time").status_code == 404

@@ -14,7 +14,9 @@ from datetime import datetime
 import holidays
 
 # Model feature vector, in a fixed order so the trained model always sees the
-# same column layout at fit and predict time.
+# same column layout at fit and predict time. The bundle on disk stores this
+# list; a mismatch means the model was trained on an older layout and must not
+# be used (services/forecast.py falls back to the baseline).
 FEATURE_NAMES: list[str] = [
     "hour",
     "day_of_week",
@@ -24,7 +26,19 @@ FEATURE_NAMES: list[str] = [
     "longitude",
     "recent_mean",
     "last_activity",
+    "temperature_c",
+    "precipitation_mm",
+    "speed_ratio",
+    "event_count",
 ]
+
+# Neutral values when a raw signal was not captured (collector disabled or
+# failed): Bogotá's typical temperature, no rain, free-flowing traffic, no
+# events. Imputing keeps the vector shape fixed without dropping the sample.
+_NEUTRAL_TEMPERATURE_C = 15.0
+_NEUTRAL_PRECIPITATION_MM = 0.0
+_NEUTRAL_SPEED_RATIO = 1.0
+_NEUTRAL_EVENT_COUNT = 0.0
 
 # Samples in a (hour, weekday) cell at which the baseline is "fully" confident.
 _CONFIDENCE_TARGET = 4
@@ -96,12 +110,19 @@ def build_feature_row(
     longitude: float,
     recent_mean: float,
     last_activity: float,
+    temperature_c: float | None = None,
+    precipitation_mm: float | None = None,
+    speed_ratio: float | None = None,
+    event_count: float | None = None,
 ) -> list[float]:
     """Build the model feature vector for ``target`` in ``FEATURE_NAMES`` order.
 
-    Used at both training time (``target`` = a History row's timestamp) and
-    inference time (``target`` = a future hour). Every feature is known ahead of
-    time so the model can predict the future.
+    Used at both training time (``target`` = a History row's timestamp, raw
+    signals = that row's captured values) and inference time (``target`` = a
+    future hour). Future raw signals are unknown, so inference passes the most
+    recent captured values — a persistence assumption, like ``last_activity``.
+    ``None`` raw signals are imputed with neutral values so the vector shape
+    never changes.
     """
     return [
         float(target.hour),
@@ -112,4 +133,21 @@ def build_feature_row(
         longitude,
         recent_mean,
         last_activity,
+        temperature_c if temperature_c is not None else _NEUTRAL_TEMPERATURE_C,
+        precipitation_mm if precipitation_mm is not None else _NEUTRAL_PRECIPITATION_MM,
+        speed_ratio if speed_ratio is not None else _NEUTRAL_SPEED_RATIO,
+        float(event_count) if event_count is not None else _NEUTRAL_EVENT_COUNT,
     ]
+
+
+def speed_ratio_from(
+    current_speed_kmh: float | None, free_flow_speed_kmh: float | None
+) -> float | None:
+    """Ratio of current to free-flow speed (1.0 = traffic flows freely).
+
+    Returns ``None`` when either speed is missing or free-flow is zero, so the
+    caller can fall back to the neutral imputation.
+    """
+    if not current_speed_kmh or not free_flow_speed_kmh:
+        return None
+    return current_speed_kmh / free_flow_speed_kmh

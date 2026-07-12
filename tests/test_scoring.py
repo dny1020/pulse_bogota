@@ -62,6 +62,9 @@ def test_raw_signals_persisted_in_history(
     # Traffic disabled -> no raw speeds.
     assert record.current_speed_kmh is None
     assert record.free_flow_speed_kmh is None
+    # Raw values from the (patched) air reading.
+    assert record.pm2_5 == 12.5
+    assert record.european_aqi == 30.0
 
 
 def test_disabled_collectors_return_none(
