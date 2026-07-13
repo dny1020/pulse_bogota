@@ -43,12 +43,25 @@ def _discovery_for(db: Session, place: Place) -> int:
 
 
 def _recommend(db: Session, place: Place, reason: str) -> DiscoveryRecommendation:
+    # One History lookup, reused for both activity_score and confidence
+    # instead of the two separate queries _activity_for + _discovery_for
+    # would otherwise trigger.
+    record = latest_history(db, place.id)
+    activity_score = record.activity_score if record else None
+    confidence = record.confidence if record else None
+    discovery_score = compute_discovery(
+        activity_score, place.rating, place.rating_count, place.category
+    )
     return DiscoveryRecommendation(
         id=place.id,
         name=place.name,
         category=place.category,
-        activity_score=_activity_for(db, place),
-        discovery_score=_discovery_for(db, place),
+        address=place.address,
+        latitude=place.latitude,
+        longitude=place.longitude,
+        activity_score=activity_score,
+        discovery_score=discovery_score,
+        confidence=confidence,
         reason=reason,
     )
 

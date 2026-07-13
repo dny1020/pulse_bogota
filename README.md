@@ -63,6 +63,11 @@ run as future model features. Visitor feedback ("quiet"/"moderate"/"busy")
 becomes the training target for History rows within ±90 minutes, so the
 forecast model learns from real labels when they exist.
 
+`/discover/*` is the recommended endpoint for daily use — each recommendation
+already carries `name`, `address`, `latitude`/`longitude`, `activity_score`,
+`confidence` and `discovery_score`, so no follow-up call to `/places/{id}` is
+needed just to find the place.
+
 ## Development
 
 ```bash

@@ -9,8 +9,12 @@ class DiscoveryRecommendation(BaseModel):
     id: int
     name: str
     category: str
+    address: str | None
+    latitude: float
+    longitude: float
     activity_score: int | None
     discovery_score: int
+    confidence: float | None
     reason: str
 
 
