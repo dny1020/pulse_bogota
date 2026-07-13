@@ -1,33 +1,34 @@
-# Python
+# Virtual env
+.venv/
+
+# Python cache
 __pycache__/
 *.pyc
 
-# Virtual environment
-.venv/
-
-# Caches
-.mypy_cache/
+# Tool caches
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 
-# Generated output
-graphify-out/
+# Coverage
+.coverage
+htmlcov/
 
-# Secrets
-.env
+# Runtime
+logs/
+*.log
 
-# Database files
+# Local databases
 *.db
+*.sqlite
 *.sqlite3
 
-# Local log files (docker bind mount)
-logs/
+# Generated graphs
+graphify-out/
 
-# OS
-.DS_Store
-CLAUDE.md
-SPEC.md
-plan.md
-.graphifyignore
-.claudeignore
-Makefile
+# Git
+.git/
+
+# IDE
+.vscode/
+.idea/
