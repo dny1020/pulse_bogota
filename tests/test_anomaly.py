@@ -7,8 +7,8 @@ from datetime import UTC, datetime, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.database.models import History, Place
-from app.services.anomaly import detect_anomalies
+from app.database import History, Place
+from app.services import detect_anomalies
 
 
 def _make_place(db: Session) -> Place:

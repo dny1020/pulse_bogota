@@ -7,8 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core.config import get_settings
-from app.core.logging import _resolve_level, configure_logging, get_logger
+from app.core import _resolve_level, configure_logging, get_logger, get_settings
 
 
 def test_resolve_level_known_and_unknown() -> None:

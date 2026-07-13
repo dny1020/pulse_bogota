@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.engine.score import (
+from app.engine import (
     compute_activity,
     compute_discovery,
     popularity_score,

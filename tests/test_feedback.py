@@ -7,8 +7,8 @@ from datetime import UTC, datetime, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.database.models import Feedback, History, Place
-from app.services.forecast import _build_training_samples
+from app.database import Feedback, History, Place
+from app.services import _build_training_samples
 
 
 def _make_place(db: Session) -> Place:

@@ -10,11 +10,10 @@ from fastapi.testclient import TestClient
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
-from app.database.models import History, Place
-from app.engine import forecast as engine
-from app.services import forecast as forecast_service
-from app.services.forecast import train_model
+from app import engine, services
+from app.core import get_settings
+from app.database import History, Place
+from app.services import train_model
 
 
 def _make_place(db: Session) -> Place:
@@ -99,7 +98,7 @@ def test_forecast_returns_hourly_points_from_baseline(db_session: Session) -> No
     base = datetime(2026, 6, 1, 8, tzinfo=UTC)
     _add_history(db_session, place.id, [(base + timedelta(hours=i), 40) for i in range(30)])
 
-    response = forecast_service.forecast_place(db_session, place, hours=24)
+    response = services.forecast_place(db_session, place, hours=24)
 
     assert len(response.points) == 24
     assert all(point.model == "baseline" for point in response.points)
@@ -109,7 +108,7 @@ def test_forecast_returns_hourly_points_from_baseline(db_session: Session) -> No
 
 def test_forecast_without_history_is_neutral(db_session: Session) -> None:
     place = _make_place(db_session)
-    response = forecast_service.forecast_place(db_session, place, hours=3)
+    response = services.forecast_place(db_session, place, hours=3)
     assert len(response.points) == 3
     assert all(point.score == 50 and point.confidence == 0.0 for point in response.points)
 
@@ -164,7 +163,7 @@ def test_forecast_uses_model_when_available(
     base = datetime(2026, 6, 1, 8, tzinfo=UTC)
     _add_history(db_session, place.id, [(base + timedelta(hours=i), 40) for i in range(10)])
 
-    response = forecast_service.forecast_place(db_session, place, hours=6)
+    response = services.forecast_place(db_session, place, hours=6)
     assert all(point.model == "gbm" for point in response.points)
     assert all(0 <= point.score <= 100 for point in response.points)
 
@@ -185,7 +184,7 @@ def test_stale_model_falls_back_to_baseline(
     base = datetime(2026, 6, 1, 8, tzinfo=UTC)
     _add_history(db_session, place.id, [(base + timedelta(hours=i), 40) for i in range(10)])
 
-    response = forecast_service.forecast_place(db_session, place, hours=6)
+    response = services.forecast_place(db_session, place, hours=6)
     assert all(point.model == "baseline" for point in response.points)
 
 

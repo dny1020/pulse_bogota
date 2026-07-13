@@ -1,6 +1,6 @@
 """FastAPI application entry point.
 
-On startup it creates tables, seeds Bogotá places and (optionally) starts the
+On startup it runs migrations, seeds Bogotá places and (optionally) starts the
 background scheduler. Run with: ``uvicorn app.main:app --reload``.
 """
 
@@ -12,27 +12,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import __version__
-from app.api import (
-    activity,
-    anomaly,
-    collectors,
-    discover,
-    engine,
-    feedback,
-    forecast,
-    health,
-    history,
-    importer,
-    places,
-    query,
-    top,
-)
-from app.core.config import get_settings
-from app.core.logging import configure_logging, get_logger
-from app.database.database import SessionLocal
-from app.database.migrate import run_migrations
-from app.database.seed import seed_places
-from app.scheduler.jobs import shutdown_scheduler, start_scheduler
+from app.api import ALL_ROUTERS
+from app.core import configure_logging, get_logger, get_settings
+from app.database import SessionLocal, run_migrations, seed_places
+from app.scheduler import shutdown_scheduler, start_scheduler
 
 log = get_logger(__name__)
 
@@ -63,19 +46,5 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="pulse_bogota", version=__version__, lifespan=lifespan)
 
-for router in (
-    health.router,
-    places.router,
-    query.router,
-    activity.router,
-    forecast.router,
-    anomaly.router,
-    history.router,
-    top.router,
-    engine.router,
-    collectors.router,
-    discover.router,
-    importer.router,
-    feedback.router,
-):
+for router in ALL_ROUTERS:
     app.include_router(router)

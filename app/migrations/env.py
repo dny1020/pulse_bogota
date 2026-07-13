@@ -10,11 +10,10 @@ from sqlalchemy import engine_from_config, pool
 
 # The app is not installed as a package (tool.uv.package = false), so put the
 # project root on sys.path for the `alembic` CLI.
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from app.core.config import get_settings  # noqa: E402
-from app.database import models  # noqa: E402,F401  (registers tables on Base.metadata)
-from app.database.database import Base  # noqa: E402
+from app.core import get_settings  # noqa: E402
+from app.database import Base  # noqa: E402  (importing it registers every table on Base.metadata)
 
 config = context.config
 

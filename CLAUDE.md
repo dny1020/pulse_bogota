@@ -22,20 +22,38 @@ uv version --bump patch               # release: then commit + git tag vX.Y.Z
 Always `uv run …` from the repo root: the app is not an installed package
 (`package = false`), tests rely on `pythonpath = ["."]`.
 
+## Layout (flat by design)
+
+`app/` has **no subpackages** — one file per layer, plus the Alembic
+`migrations/` dir (Alembic requires a directory):
+
+```
+core.py       Settings + logging          database.py  engine/session, models, seed, run_migrations
+schemas.py    all Pydantic models         engine.py    pure scoring + forecast baseline (no I/O)
+collectors.py weather/traffic/events/google/air/osm    services.py  all business logic
+api.py        every router (ALL_ROUTERS)  scheduler.py APScheduler jobs      main.py  app + lifespan
+```
+
+**Import rule that keeps tests offline:** `services.py` uses collectors and the
+engine **as modules** (`collectors.fetch_weather(...)`, `engine.compute_activity(...)`),
+never `from app.collectors import fetch_weather`. Tests monkeypatch those module
+attributes; a direct function import would bind the original and bypass the patch.
+
 ## How it works (data flow)
 
 **Collectors → DB → Engine → API.**
 
-- `app/collectors/`: weather (Open-Meteo, keyless), traffic (TomTom), events
-  (Ticketmaster), google (ratings), air (Open-Meteo air quality, keyless). One
-  job each, never call each other. On a missing API key or a failed request
-  they return `None` — **never add mocks**, a disabled collector is just the
-  real client waiting for a key. Air is informative only: never joins the
-  activity blend, its raw values (`pm2_5`, `european_aqi`) go to History.
-- `app/engine/score.py` is pure (no I/O). Weights: traffic .40 / weather .25 /
+- `collectors.py`: weather (Open-Meteo, keyless), traffic (TomTom), events
+  (Ticketmaster), google (ratings), air (Open-Meteo air quality, keyless), osm
+  (Overpass place discovery). One job each, never call each other. On a missing
+  API key or a failed request they return `None` — **never add mocks**, a
+  disabled collector is just the real client waiting for a key. Air is
+  informative only: never joins the activity blend, its raw values (`pm2_5`,
+  `european_aqi`) go to History.
+- `engine.py` is pure (no I/O). Weights: traffic .40 / weather .25 /
   events .20 / popularity .15. Missing signals → renormalise weights and lower
   `confidence`. **Graceful degradation is the core design.**
-- `app/services/scoring.py` is the ONLY scoring path (15-min scheduler job,
+- `services.py:score_place` is the ONLY scoring path (15-min scheduler job,
   `POST /engine/recalculate`, `/top/*`). Never re-implement scoring in routers.
 - `Place` = mutable current state; `History` = append-only, one row per scoring
   run (sub-scores + raw signals for future ML). Column names: events→
@@ -51,8 +69,8 @@ Always `uv run …` from the repo root: the app is not an installed package
   within ±90 min — real labels beat the system's own estimate. Anomalies
   (`GET /anomalies`) = on-demand z-score per (hour, weekday) cell, global
   fallback when the cell is sparse (`basis` field says which).
-- `POST /collector/{weather,traffic,events}` are diagnostic only (nothing
-  persisted). OSM importer (`collectors/osm.py` + `services/importer.py`)
+- `POST /collector/{weather,traffic,events,air}` are diagnostic only (nothing
+  persisted). The OSM importer (`fetch_osm_places` + `import_osm_places`)
   discovers new places via Overpass — weekly job + `POST /importer/osm`,
   idempotent upsert on `Place.osm_id`.
 - `/nearby` = SQL bounding-box prefilter + Python haversine. No PostGIS.
@@ -60,8 +78,8 @@ Always `uv run …` from the repo root: the app is not an installed package
 ## Rules & gotchas
 
 - **Schema change ⇒ hand-written Alembic migration** in
-  `app/database/migrations/versions/` (no `alembic.ini`; CLI:
-  `uv run python -m app.database.migrate`). Never reintroduce `create_all()`
+  `app/migrations/versions/` (no `alembic.ini`; CLI:
+  `uv run python -m app.database`). Never reintroduce `create_all()`
   in the app (tests still use it on in-memory SQLite). Seeding only runs on an
   empty table.
 - Keep models/queries **dialect-neutral**: everything must work on both SQLite
@@ -69,7 +87,7 @@ Always `uv run …` from the repo root: the app is not an installed package
 - Tests: in-memory SQLite via a `get_db` override; the `client` fixture skips
   the app lifespan; `offline_collectors` patches all network
   (`tests/conftest.py`).
-- Thin routers, logic in `app/services/`, every endpoint declares a
+- Thin routers in `api.py`, logic in `services.py`, every endpoint declares a
   `response_model`, sessions via `Depends(get_db)`. `Depends()`/`Query()` in
   argument defaults is intentional (Ruff `extend-immutable-calls`).
 - **Deploy is manual by design**: CI on push to `main` tests then publishes the
@@ -78,7 +96,7 @@ Always `uv run …` from the repo root: the app is not an installed package
   `docker compose pull && docker compose up -d`. Backups: manual `pg_dump`.
   Local Docker: `docker compose up --build -d` (api + PostgreSQL 17).
 - Version has a single source: `pyproject.toml` (read with `tomllib` in
-  `app/__init__.py`). Release with `make bump-*`.
+  `app/__init__.py`). Release with `uv version --bump patch` + git tag.
 - **Out of scope unless asked:** frontend, auth, Redis/Celery, caching layer,
   vector DB.
 - Style: junior-readable, explicit over clever, functions ≲40 lines, type

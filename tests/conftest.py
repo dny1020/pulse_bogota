@@ -11,10 +11,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.collectors import air, events, traffic, weather
-from app.core.config import Settings, get_settings
-from app.database.database import Base, get_db
-from app.database.seed import seed_places
+from app import collectors
+from app.core import Settings, get_settings
+from app.database import Base, get_db, seed_places
 from app.main import app
 
 _ENV_EXAMPLE = Path(__file__).resolve().parent.parent / ".env.example"
@@ -84,14 +83,16 @@ def offline_collectors(monkeypatch: pytest.MonkeyPatch) -> None:
     activity comes from weather + the seeded popularity signal.
     """
     monkeypatch.setattr(
-        weather,
+        collectors,
         "fetch_weather",
-        lambda place: weather.WeatherReading(score=50.0, temperature_c=18.0, precipitation_mm=0.0),
+        lambda place: collectors.WeatherReading(
+            score=50.0, temperature_c=18.0, precipitation_mm=0.0
+        ),
     )
-    monkeypatch.setattr(traffic, "fetch_traffic", lambda place: None)
-    monkeypatch.setattr(events, "fetch_events", lambda place: None)
+    monkeypatch.setattr(collectors, "fetch_traffic", lambda place: None)
+    monkeypatch.setattr(collectors, "fetch_events", lambda place: None)
     monkeypatch.setattr(
-        air,
+        collectors,
         "fetch_air",
-        lambda place: air.AirReading(score=70.0, pm2_5=12.5, european_aqi=30.0),
+        lambda place: collectors.AirReading(score=70.0, pm2_5=12.5, european_aqi=30.0),
     )

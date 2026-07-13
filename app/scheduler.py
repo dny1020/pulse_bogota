@@ -1,16 +1,12 @@
-"""APScheduler wiring to recalculate scores on a fixed interval."""
+"""APScheduler wiring: recalculate scores on an interval, weekly jobs on cron."""
 
 from __future__ import annotations
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from app.core.config import get_settings
-from app.core.logging import get_logger
-from app.database.database import SessionLocal
-from app.services.anomaly import detect_anomalies
-from app.services.forecast import train_model
-from app.services.importer import import_osm_places
-from app.services.scoring import recalculate_all, run_google_enrichment
+from app import services
+from app.core import get_logger, get_settings
+from app.database import SessionLocal
 
 log = get_logger(__name__)
 
@@ -20,7 +16,7 @@ def _recalculate_job() -> None:
     # the scheduler try again on the next interval, never die silently.
     try:
         with SessionLocal() as db:
-            count = recalculate_all(db)
+            count = services.recalculate_all(db)
         log.info("scheduled_recalculate", places=count)
     except Exception as exc:
         log.error("scheduled_recalculate_failed", error=str(exc))
@@ -29,7 +25,7 @@ def _recalculate_job() -> None:
 def _osm_import_job() -> None:
     try:
         with SessionLocal() as db:
-            result = import_osm_places(db)
+            result = services.import_osm_places(db)
         log.info("scheduled_osm_import", **result)
     except Exception as exc:
         log.error("scheduled_osm_import_failed", error=str(exc))
@@ -38,7 +34,7 @@ def _osm_import_job() -> None:
 def _train_forecast_job() -> None:
     try:
         with SessionLocal() as db:
-            result = train_model(db)
+            result = services.train_model(db)
         log.info("scheduled_forecast_train", **result)
     except Exception as exc:
         log.error("scheduled_forecast_train_failed", error=str(exc))
@@ -47,7 +43,7 @@ def _train_forecast_job() -> None:
 def _google_refresh_job() -> None:
     try:
         with SessionLocal() as db:
-            updated = run_google_enrichment(db)
+            updated = services.run_google_enrichment(db)
         log.info("scheduled_google_refresh", updated=len(updated))
     except Exception as exc:
         log.error("scheduled_google_refresh_failed", error=str(exc))
@@ -56,7 +52,7 @@ def _google_refresh_job() -> None:
 def _anomaly_scan_job() -> None:
     try:
         with SessionLocal() as db:
-            anomalies = detect_anomalies(db)
+            anomalies = services.detect_anomalies(db)
         log.info("scheduled_anomaly_scan", anomalies=len(anomalies))
     except Exception as exc:
         log.error("scheduled_anomaly_scan_failed", error=str(exc))

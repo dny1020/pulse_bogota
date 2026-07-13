@@ -7,10 +7,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.collectors import osm
-from app.collectors.osm import OsmPlace, _parse_element, _round_robin_by_category
-from app.database.models import History, Place
-from app.services.importer import import_osm_places
+from app import collectors
+from app.collectors import OsmPlace, _parse_element, _round_robin_by_category
+from app.database import History, Place
+from app.services import import_osm_places
 
 
 def _candidate(
@@ -67,7 +67,7 @@ def test_round_robin_keeps_every_category() -> None:
 def test_import_creates_then_updates(
     db_session: Session, monkeypatch: pytest.MonkeyPatch, offline_collectors: None
 ) -> None:
-    monkeypatch.setattr(osm, "fetch_osm_places", lambda limit: [_candidate()])
+    monkeypatch.setattr(collectors, "fetch_osm_places", lambda limit: [_candidate()])
 
     first = import_osm_places(db_session)
     assert first == {"fetched": 1, "created": 1, "updated": 0}
@@ -83,7 +83,7 @@ def test_import_scores_new_places(
     db_session: Session, monkeypatch: pytest.MonkeyPatch, offline_collectors: None
 ) -> None:
     """A freshly imported place gets a History row immediately."""
-    monkeypatch.setattr(osm, "fetch_osm_places", lambda limit: [_candidate()])
+    monkeypatch.setattr(collectors, "fetch_osm_places", lambda limit: [_candidate()])
 
     import_osm_places(db_session)
 
@@ -100,7 +100,7 @@ def test_import_adopts_existing_place_by_name(
 ) -> None:
     db_session.add(Place(name="Café Prueba", category="cafe", latitude=4.0, longitude=-74.0))
     db_session.commit()
-    monkeypatch.setattr(osm, "fetch_osm_places", lambda limit: [_candidate()])
+    monkeypatch.setattr(collectors, "fetch_osm_places", lambda limit: [_candidate()])
 
     result = import_osm_places(db_session)
     assert result == {"fetched": 1, "created": 0, "updated": 1}
@@ -113,7 +113,7 @@ def test_import_adopts_existing_place_by_name(
 def test_import_endpoint(
     seeded_client: TestClient, monkeypatch: pytest.MonkeyPatch, offline_collectors: None
 ) -> None:
-    monkeypatch.setattr(osm, "fetch_osm_places", lambda limit: [_candidate()])
+    monkeypatch.setattr(collectors, "fetch_osm_places", lambda limit: [_candidate()])
     response = seeded_client.post("/importer/osm", params={"limit": 10})
     assert response.status_code == 200
     assert response.json() == {"fetched": 1, "created": 1, "updated": 0}

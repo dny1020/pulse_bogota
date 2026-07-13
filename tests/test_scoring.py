@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.database.models import History
+from app.database import History
 
 
 def test_recalculate_populates_activity(
