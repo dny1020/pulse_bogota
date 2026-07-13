@@ -40,12 +40,12 @@ def test_history_recorded_per_run(seeded_client: TestClient, offline_collectors:
     assert len(history.json()) == 2
 
 
-def test_top_quiet_and_busy_ordering(seeded_client: TestClient, offline_collectors: None) -> None:
+def test_top_busy_ordering(seeded_client: TestClient, offline_collectors: None) -> None:
     seeded_client.post("/engine/recalculate")
-    quiet = [item["score"] for item in seeded_client.get("/top/quiet").json()]
-    busy = [item["score"] for item in seeded_client.get("/top/busy").json()]
-    assert quiet == sorted(quiet)
-    assert busy == sorted(busy, reverse=True)
+    body = seeded_client.get("/top/busy").json()
+    scores = [item["score"] for item in body]
+    assert scores == sorted(scores, reverse=True)
+    assert all(item["name"] for item in body)
 
 
 def test_raw_signals_persisted_in_history(

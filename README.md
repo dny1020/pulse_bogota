@@ -51,7 +51,7 @@ quiet café can rank above a crowded landmark.
 | GET | `/forecast/{place_id}/best-time` | Quietest & busiest predicted hour to visit |
 | GET | `/anomalies[/{place_id}]` | Unusual readings (hour-aware z-score) |
 | POST/GET | `/feedback/{place_id}` | Report / list real crowd levels (ground truth) |
-| GET | `/top/quiet`, `/top/busy` | Rankings |
+| GET | `/top/busy` | Busiest places right now (quiet ranking: use `/discover/quiet`) |
 | POST | `/engine/recalculate` | Score all places now |
 | POST | `/collector/{weather,traffic,events,air,google}` | Run one collector |
 | POST | `/importer/osm` | Discover & store new places from OpenStreetMap |

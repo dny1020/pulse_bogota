@@ -16,7 +16,8 @@ router = APIRouter(tags=["activity"])
 
 @router.get("/activity/{place_id}", response_model=ActivityRead)
 def get_activity(place_id: int, db: Session = Depends(get_db)) -> ActivityRead:
-    if places_service.get_place(db, place_id) is None:
+    place = places_service.get_place(db, place_id)
+    if place is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Place not found")
     record = scoring_service.latest_history(db, place_id)
     if record is None:
@@ -26,6 +27,10 @@ def get_activity(place_id: int, db: Session = Depends(get_db)) -> ActivityRead:
         )
     return ActivityRead(
         place_id=place_id,
+        name=place.name,
+        address=place.address,
+        latitude=place.latitude,
+        longitude=place.longitude,
         score=record.activity_score,
         status=status_label(record.activity_score),
         confidence=record.confidence,

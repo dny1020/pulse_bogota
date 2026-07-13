@@ -100,19 +100,24 @@ def _activity_overview(db: Session) -> list[tuple[Place, History]]:
     return overview
 
 
-def top_places(db: Session, *, busiest: bool, limit: int) -> list[ActivityRead]:
-    """Return the quietest (or busiest) places by latest activity score."""
+def top_busy_places(db: Session, *, limit: int) -> list[ActivityRead]:
+    """Return the busiest places by latest activity score, busiest first."""
     overview = _activity_overview(db)
-    overview.sort(key=lambda pair: pair[1].activity_score, reverse=busiest)
-    return [
-        ActivityRead(
-            place_id=place.id,
-            score=record.activity_score,
-            status=status_label(record.activity_score),
-            confidence=record.confidence,
-        )
-        for place, record in overview[:limit]
-    ]
+    overview.sort(key=lambda pair: pair[1].activity_score, reverse=True)
+    return [_to_activity_read(place, record) for place, record in overview[:limit]]
+
+
+def _to_activity_read(place: Place, record: History) -> ActivityRead:
+    return ActivityRead(
+        place_id=place.id,
+        name=place.name,
+        address=place.address,
+        latitude=place.latitude,
+        longitude=place.longitude,
+        score=record.activity_score,
+        status=status_label(record.activity_score),
+        confidence=record.confidence,
+    )
 
 
 def run_signal_collector(db: Session, name: str) -> list[dict[str, object]]:
