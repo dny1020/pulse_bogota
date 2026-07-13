@@ -42,6 +42,11 @@ def _discovery_for(db: Session, place: Place) -> int:
     )
 
 
+def _google_maps_url(latitude: float, longitude: float) -> str:
+    """Google's cross-platform maps link: opens the app if installed, else web."""
+    return f"https://www.google.com/maps/search/?api=1&query={latitude},{longitude}"
+
+
 def _recommend(db: Session, place: Place, reason: str) -> DiscoveryRecommendation:
     # One History lookup, reused for both activity_score and confidence
     # instead of the two separate queries _activity_for + _discovery_for
@@ -57,8 +62,8 @@ def _recommend(db: Session, place: Place, reason: str) -> DiscoveryRecommendatio
         name=place.name,
         category=place.category,
         address=place.address,
-        latitude=place.latitude,
-        longitude=place.longitude,
+        coordinates=f"{place.latitude},{place.longitude}",
+        maps_url=_google_maps_url(place.latitude, place.longitude),
         activity_score=activity_score,
         discovery_score=discovery_score,
         confidence=confidence,

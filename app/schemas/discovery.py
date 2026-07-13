@@ -10,8 +10,8 @@ class DiscoveryRecommendation(BaseModel):
     name: str
     category: str
     address: str | None
-    latitude: float
-    longitude: float
+    coordinates: str  # "latitude,longitude" -- ready to paste into any maps app
+    maps_url: str  # opens the place directly in Google Maps
     activity_score: int | None
     discovery_score: int
     confidence: float | None
