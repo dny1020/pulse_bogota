@@ -17,13 +17,17 @@ COPY pyproject.toml uv.lock ./
 # CI gate: full dev toolchain, then lint + type-check + tests.
 # Built with `--target test`; never ships.
 FROM base AS test
+# libatomic1: needed by the Node.js runtime pyright downloads on first run
+# (python:3.13-slim doesn't ship it). Only the test stage needs this.
+RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 \
+    && rm -rf /var/lib/apt/lists/*
 RUN uv sync --frozen
 COPY app ./app
 COPY tests ./tests
 COPY .env.example ./
 RUN uv run ruff check . \
-    && uv run black --check . \
-    && uv run mypy app \
+    && uv run ruff format --check . \
+    && uv run pyright app tests \
     && uv run pytest
 
 # Runtime image (default target): runtime dependencies only, no dev group.

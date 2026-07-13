@@ -71,9 +71,9 @@ needed just to find the place.
 ## Development
 
 ```bash
-uv run pytest                                                  # tests (offline; network is mocked)
-uv run ruff check . && uv run black --check . && uv run mypy app   # same gate as CI
-uv version --bump patch                                        # then commit + git tag vX.Y.Z
+uv run pytest                                                       # tests (offline; network is mocked)
+uv run ruff check . && uv run ruff format --check . && uv run pyright app tests  # same gate as CI
+uv version --bump patch                                             # then commit + git tag vX.Y.Z
 ```
 
 ## Docker

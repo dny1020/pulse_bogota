@@ -22,8 +22,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "black>=24.10",
-    "mypy>=1.13",
+    "pyright>=1.1",
     "pytest>=8.3",
     "ruff>=0.7",
 ]
@@ -31,10 +30,6 @@ dev = [
 [tool.uv]
 # This is an application, not a library — manage deps only, don't build/install it.
 package = false
-
-[tool.black]
-line-length = 100
-target-version = ["py313"]
 
 [tool.ruff]
 line-length = 100
@@ -47,10 +42,13 @@ select = ["E", "F", "I", "UP", "B"]
 # FastAPI uses Depends()/Query() as argument defaults by design.
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
 
-[tool.mypy]
-python_version = "3.13"
-ignore_missing_imports = true
-warn_unused_ignores = true
+[tool.pyright]
+include = ["app", "tests"]
+pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
+reportUnnecessaryTypeIgnoreComment = true
 
 [tool.pytest.ini_options]
 addopts = "-q"
