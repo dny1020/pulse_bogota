@@ -34,6 +34,14 @@ def example_env_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def clean_traffic_cache() -> Iterator[None]:
+    """Keep the module-level traffic cache and budget from leaking across tests."""
+    collectors.reset_traffic_cache()
+    yield
+    collectors.reset_traffic_cache()
+
+
 @pytest.fixture
 def db_session() -> Iterator[Session]:
     """A fresh in-memory SQLite session per test."""

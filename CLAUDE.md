@@ -49,7 +49,15 @@ attributes; a direct function import would bind the original and bypass the patc
   API key or a failed request they return `None` — **never add mocks**, a
   disabled collector is just the real client waiting for a key. Air is
   informative only: never joins the activity blend, its raw values (`pm2_5`,
-  `european_aqi`) go to History.
+  `european_aqi`) go to History. Errors from the keyed collectors (traffic,
+  events, google) go through `_redact` — those APIs take the key as a query
+  param, so the URL inside an HTTP error carries it.
+- **Traffic is metered**: TomTom allows 2500 req/day (free tier) but scoring
+  hits every place every 15 min, so calls/day = places × (1440 /
+  `TRAFFIC_CACHE_MINUTES`). Readings are cached per place; `TOMTOM_DAILY_BUDGET`
+  is the backstop — once spent, traffic returns `None` (logs
+  `traffic_budget_exhausted`) instead of burning quota on 403s. Growing the
+  catalogue means raising the cache window, not the budget.
 - `engine.py` is pure (no I/O). Weights: traffic .40 / weather .25 /
   events .20 / popularity .15. Missing signals → renormalise weights and lower
   `confidence`. **Graceful degradation is the core design.**

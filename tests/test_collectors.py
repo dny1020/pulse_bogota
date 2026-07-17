@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 
 from app import collectors
 from app.collectors import score_from_aqi, score_from_conditions
-from app.core import Settings
+from app.core import Settings, get_settings
 from app.database import Place
 
 
@@ -59,6 +61,90 @@ def test_keyed_collectors_disabled_without_key() -> None:
     assert collectors.fetch_traffic_score(place) is None
     assert collectors.fetch_event_score(place) is None
     assert collectors.fetch_place_metadata(place) is None
+
+
+@pytest.fixture
+def tomtom_key(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
+    """Enable the traffic collector with a recognisable fake key."""
+    key = "tomtom-secret-key"
+    monkeypatch.setenv("TOMTOM_API_KEY", key)
+    get_settings.cache_clear()
+    yield key
+    get_settings.cache_clear()
+
+
+def _traffic_response(*args: object, **kwargs: object) -> _FakeResponse:
+    return _FakeResponse({"flowSegmentData": {"currentSpeed": 20, "freeFlowSpeed": 40}})
+
+
+def test_traffic_reading_is_cached_between_calls(
+    monkeypatch: pytest.MonkeyPatch, tomtom_key: str
+) -> None:
+    calls = 0
+
+    def counting_get(*args: object, **kwargs: object) -> _FakeResponse:
+        nonlocal calls
+        calls += 1
+        return _traffic_response()
+
+    monkeypatch.setattr(collectors.httpx, "get", counting_get)
+    first = collectors.fetch_traffic(_place())
+    second = collectors.fetch_traffic(_place())
+
+    assert calls == 1
+    assert first is not None and second is not None
+    assert first.score == second.score == 50.0
+
+
+def test_traffic_refetches_once_the_cache_expires(
+    monkeypatch: pytest.MonkeyPatch, tomtom_key: str
+) -> None:
+    calls = 0
+
+    def counting_get(*args: object, **kwargs: object) -> _FakeResponse:
+        nonlocal calls
+        calls += 1
+        return _traffic_response()
+
+    monkeypatch.setattr(collectors.httpx, "get", counting_get)
+    monkeypatch.setenv("TRAFFIC_CACHE_MINUTES", "0")
+    get_settings.cache_clear()
+
+    collectors.fetch_traffic(_place())
+    collectors.fetch_traffic(_place())
+    assert calls == 2
+
+
+def test_traffic_stops_calling_once_the_daily_budget_is_spent(
+    monkeypatch: pytest.MonkeyPatch, tomtom_key: str
+) -> None:
+    monkeypatch.setattr(collectors.httpx, "get", _traffic_response)
+    monkeypatch.setenv("TRAFFIC_CACHE_MINUTES", "0")
+    monkeypatch.setenv("TOMTOM_DAILY_BUDGET", "2")
+    get_settings.cache_clear()
+
+    place = _place()
+    assert collectors.fetch_traffic(place) is not None
+    assert collectors.fetch_traffic(place) is not None
+    # Budget spent: the signal drops out instead of burning quota on a 403.
+    assert collectors.fetch_traffic(place) is None
+
+
+def test_traffic_error_does_not_log_the_api_key(
+    monkeypatch: pytest.MonkeyPatch, tomtom_key: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def boom(*args: object, **kwargs: object) -> None:
+        raise collectors.httpx.HTTPError(
+            f"Client error '403 Forbidden' for url 'https://api.tomtom.com/x?key={tomtom_key}'"
+        )
+
+    monkeypatch.setattr(collectors.httpx, "get", boom)
+    assert collectors.fetch_traffic(_place()) is None
+
+    logged = capsys.readouterr().out
+    assert "traffic_collector_failed" in logged
+    assert tomtom_key not in logged
+    assert "key=***" in logged
 
 
 def test_air_score_from_aqi_is_pure() -> None:

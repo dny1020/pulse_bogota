@@ -13,7 +13,7 @@ remaining weights. Only Open-Meteo (weather, air) works with no key.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import httpx
 
@@ -22,6 +22,26 @@ from app.core import get_logger, get_settings
 from app.database import Place
 
 log = get_logger(__name__)
+
+
+def _redact(text: str) -> str:
+    """Blank out any configured API key found in ``text``.
+
+    The keyed APIs take their credential as a query parameter, so httpx puts it
+    in the request URL -- and an HTTP error message quotes that URL in full.
+    Anything derived from an exception is passed through here before it reaches
+    the logs.
+    """
+    settings = get_settings()
+    keys = (
+        settings.tomtom_api_key,
+        settings.google_places_api_key,
+        settings.ticketmaster_api_key,
+    )
+    for key in keys:
+        if key:
+            text = text.replace(key, "***")
+    return text
 
 
 # --- weather (Open-Meteo, no key) -----------------------------------------
@@ -166,15 +186,64 @@ class TrafficReading:
     free_flow_speed_kmh: float | None = None
 
 
+# Cached readings (place id -> when it was fetched, what came back) and the
+# running spend against the daily budget. Both are per-process and reset on
+# restart, which is fine: the cache is short-lived and TomTom's own quota
+# resets daily anyway.
+_traffic_cache: dict[int, tuple[datetime, TrafficReading]] = {}
+_budget_date: date | None = None
+_budget_spent = 0
+
+
+def reset_traffic_cache() -> None:
+    """Drop the cached readings and the budget counter (used by tests)."""
+    global _budget_date, _budget_spent
+    _traffic_cache.clear()
+    _budget_date = None
+    _budget_spent = 0
+
+
+def _spend_budget() -> bool:
+    """Claim one TomTom request, or return False when today's budget is gone."""
+    global _budget_date, _budget_spent
+    today = datetime.now(UTC).date()
+    if today != _budget_date:
+        _budget_date = today
+        _budget_spent = 0
+    budget = get_settings().tomtom_daily_budget
+    if _budget_spent >= budget:
+        return False
+    _budget_spent += 1
+    if _budget_spent == budget:
+        # Worth a warning, not an error: scoring carries on without traffic.
+        # It means the catalogue has outgrown traffic_cache_minutes.
+        log.warning("traffic_budget_exhausted", budget=budget)
+    return True
+
+
 def fetch_traffic(place: Place) -> TrafficReading | None:
     """Return the current traffic reading, or ``None`` if no key / unavailable.
 
     Congestion is derived from how far the current speed has dropped below the
     free-flow speed near the place. Higher score means busier. Raw speeds are
     kept alongside so scoring runs can persist them for future ML features.
+
+    TomTom is metered, so a reading is cached per place for
+    ``traffic_cache_minutes`` and reused rather than refetched on every scoring
+    run. Once the daily budget is spent the collector returns ``None`` like any
+    other unavailable signal and the engine renormalises without traffic.
     """
     settings = get_settings()
     if not settings.tomtom_api_key:
+        return None
+
+    cached = _traffic_cache.get(place.id)
+    if cached:
+        fetched_at, reading = cached
+        if datetime.now(UTC) - fetched_at < timedelta(minutes=settings.traffic_cache_minutes):
+            return reading
+
+    if not _spend_budget():
         return None
 
     params = {"point": f"{place.latitude},{place.longitude}", "key": settings.tomtom_api_key}
@@ -185,17 +254,18 @@ def fetch_traffic(place: Place) -> TrafficReading | None:
         current = float(segment["currentSpeed"])
         free_flow = float(segment["freeFlowSpeed"])
     except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
-        log.warning("traffic_collector_failed", place_id=place.id, error=str(exc))
+        log.warning("traffic_collector_failed", place_id=place.id, error=_redact(str(exc)))
         return None
 
     if free_flow <= 0:
         return None
-    congestion = max(0.0, 1.0 - current / free_flow)
-    return TrafficReading(
-        score=round(congestion * 100, 2),
+    reading = TrafficReading(
+        score=round(max(0.0, 1.0 - current / free_flow) * 100, 2),
         current_speed_kmh=current,
         free_flow_speed_kmh=free_flow,
     )
+    _traffic_cache[place.id] = (datetime.now(UTC), reading)
+    return reading
 
 
 def fetch_traffic_score(place: Place) -> float | None:
@@ -255,7 +325,7 @@ def fetch_events(place: Place) -> EventsReading | None:
         count = int(payload["page"]["totalElements"])
         next_event_starts_at = _parse_next_event_start(payload)
     except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
-        log.warning("events_collector_failed", place_id=place.id, error=str(exc))
+        log.warning("events_collector_failed", place_id=place.id, error=_redact(str(exc)))
         return None
 
     return EventsReading(
@@ -333,7 +403,7 @@ def fetch_place_metadata(place: Place) -> dict[str, object] | None:
             return None
         best = candidates[0]
     except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
-        log.warning("google_collector_failed", place_id=place.id, error=str(exc))
+        log.warning("google_collector_failed", place_id=place.id, error=_redact(str(exc)))
         return None
 
     return {

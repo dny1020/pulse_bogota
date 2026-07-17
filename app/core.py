@@ -64,6 +64,15 @@ class Settings(BaseSettings):
     google_places_api_key: str | None = None
     ticketmaster_api_key: str | None = None
 
+    # TomTom is metered (2500 requests/day on the free tier) while scoring runs
+    # every scheduler_interval_minutes over the whole catalogue, so calls grow
+    # with the number of places. The cache decouples the two: a reading is
+    # reused for traffic_cache_minutes instead of refetched on every run.
+    # The daily budget is a backstop -- once the catalogue outgrows the cache
+    # the collector goes quiet (and says so) instead of burning quota on 403s.
+    traffic_cache_minutes: int = 60
+    tomtom_daily_budget: int = 2400
+
     # Activity forecasting. A weekly job trains a model into forecast_model_path;
     # it is only used for a place once it has forecast_min_samples History rows,
     # otherwise the hourly-profile baseline is used (graceful degradation).
